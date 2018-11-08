@@ -1,0 +1,2241 @@
+{
+ "cells": [
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "# Building up"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 1,
+   "metadata": {},
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "(1953, 3072)\n",
+      "(1953,)\n",
+      "Done loading training data, using time:(min) 0.06361965735753378\n"
+     ]
+    }
+   ],
+   "source": [
+    "import numpy as np\n",
+    "import time\n",
+    "time_start = time.time()\n",
+    "X = np.genfromtxt('00_Data/train_X_dog_cat.csv', delimiter=',')\n",
+    "y = np.genfromtxt('00_Data/train_y_dog_cat.csv', delimiter=',')\n",
+    "print(X.shape)\n",
+    "\n",
+    "n = X.shape[0]\n",
+    "d = X.shape[1]\n",
+    "print(y.shape)\n",
+    "time_end = time.time()\n",
+    "print(\"Done loading training data, using time:(min)\", (time_end-time_start)/60)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 2,
+   "metadata": {},
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "2000\n"
+     ]
+    }
+   ],
+   "source": [
+    "X_test = np.genfromtxt('00_Data/test_X_dog_cat.csv', delimiter=',')\n",
+    "y_test = np.genfromtxt('00_Data/test_y_dog_cat.csv', delimiter=',')\n",
+    "m = X_test.shape[0]\n",
+    "print(m)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 3,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "from sklearn import preprocessing\n",
+    "scaler = preprocessing.MinMaxScaler().fit(X)\n",
+    "X = scaler.transform(X)\n",
+    "X_test = scaler.transform(X_test)\n"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 9,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "def linear_kernel(x1,x2):\n",
+    "    # x1 = (n,d) X2 = (m,d)\n",
+    "    return(np.dot(x1,x2.T))\n",
+    "\n",
+    "def inhomogeneous_poly_kernel(x1,x2):\n",
+    "    n = x1.shape[0]\n",
+    "    m = x2.shape[0]\n",
+    "    return np.power(np.ones(shape=(n,m)) + np.dot(x1,x2.T), 5)\n",
+    "\n",
+    "                  \n",
+    "def gaussian_kernel(x1,x2,sigma=100):\n",
+    "    n = x1.shape[0]\n",
+    "    m = x2.shape[0]\n",
+    "    K = np.zeros(shape=(n,m))\n",
+    "    for i in range(n):\n",
+    "        for j in range(m):\n",
+    "            K[i][j] = gaussian(x1[i],x2[j],sigma)\n",
+    "    return (K)\n",
+    "\n",
+    "def gaussian(x,y,sigma):\n",
+    "    return np.exp((-(np.linalg.norm(x-y,2)**2))/(2*sigma**2))"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 5,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "def evaluation(ans, y):\n",
+    "    right = 0\n",
+    "    num = ans.shape[0]\n",
+    "    for i in range(ans.shape[0]):\n",
+    "        if (ans[i] - 0.5)*y[i] > 0:\n",
+    "            right += 1\n",
+    "    return(right/float(num))"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 6,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "def tolerable(delta,tol):\n",
+    "    from numpy import linalg as LA\n",
+    "    if LA.norm(delta,1) > tol:\n",
+    "        return False\n",
+    "    else:\n",
+    "        return True"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 26,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "def probability(alpha, Ki):\n",
+    "    s = np.dot(alpha, Ki)\n",
+    "    return(1/(1+np.exp(-s)))\n",
+    "\n",
+    "def train(K,y,max_iter,batch_size,regu_para, eta,tol):\n",
+    "    time_start = time.time()\n",
+    "    #alpha = np.random.uniform(size=(n))\n",
+    "    alpha = np.zeros(n)\n",
+    "    for t in range(max_iter):\n",
+    "        samples = np.random.permutation(n)[:batch_size]\n",
+    "        g = regu_para * alpha\n",
+    "        #g = np.zeros(n)\n",
+    "        for i in samples:\n",
+    "            pi = probability(alpha, K[i])\n",
+    "            g[i] = g[i] + (pi - (y[i]+1)/2.0)\n",
+    "        alpha = alpha - eta*g\n",
+    "        if tolerable(g, tol):\n",
+    "            break\n",
+    "        if t % 2000 == 0:\n",
+    "            print(\"iter %d train_accuracy:%f\"%(t,evaluation(probability(alpha,K), y)))\n",
+    "    time_end = time.time()\n",
+    "    print(\"Done training, using time:(min)\", \n",
+    "          (time_end-time_start)/60)\n",
+    "    return(alpha)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 27,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "def experiment(kernel, X,y,X_test,y_test,regu_para, eta,tol= 0.1, max_iter=50000, batch_size=640):\n",
+    "    K = kernel(X,X)\n",
+    "    K_test = kernel(X,X_test)\n",
+    "    print(\"Done kernel generating\")\n",
+    "    alpha = train(K,y, max_iter,batch_size,regu_para, eta,tol)\n",
+    "    print(\"Done training\")\n",
+    "    print(alpha)\n",
+    "    print(\"training result\")\n",
+    "    ans = probability(alpha,K)\n",
+    "    #print(ans)\n",
+    "    print(evaluation(ans, y))\n",
+    "    #print(y)\n",
+    "    print(\"test result\")\n",
+    "    ans = probability(alpha,K_test)\n",
+    "    #print(ans)\n",
+    "    print(evaluation(ans, y_test))\n",
+    "    #print(y_test)"
+   ]
+  },
+  {
+   "cell_type": "raw",
+   "metadata": {},
+   "source": [
+    "# Linear kernel exps"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 28,
+   "metadata": {
+    "scrolled": true
+   },
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "Done kernel generating\n",
+      "iter 0 train_accuracy:0.520225\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      "/home/y247xie/.local/lib/python3.5/site-packages/ipykernel_launcher.py:3: RuntimeWarning: overflow encountered in exp\n",
+      "  This is separate from the ipykernel package so we can avoid doing imports until\n"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "iter 2000 train_accuracy:0.555044\n",
+      "iter 4000 train_accuracy:0.589350\n",
+      "iter 6000 train_accuracy:0.593446\n",
+      "iter 8000 train_accuracy:0.624680\n",
+      "iter 10000 train_accuracy:0.665643\n",
+      "iter 12000 train_accuracy:0.629288\n",
+      "iter 14000 train_accuracy:0.621608\n",
+      "iter 16000 train_accuracy:0.697901\n",
+      "iter 18000 train_accuracy:0.627240\n",
+      "iter 20000 train_accuracy:0.720430\n",
+      "iter 22000 train_accuracy:0.710701\n",
+      "iter 24000 train_accuracy:0.661546\n",
+      "iter 26000 train_accuracy:0.632873\n",
+      "iter 28000 train_accuracy:0.604199\n",
+      "iter 30000 train_accuracy:0.584229\n",
+      "iter 32000 train_accuracy:0.654378\n",
+      "iter 34000 train_accuracy:0.636457\n",
+      "iter 36000 train_accuracy:0.675371\n",
+      "iter 38000 train_accuracy:0.584741\n",
+      "iter 40000 train_accuracy:0.719406\n",
+      "iter 42000 train_accuracy:0.623656\n",
+      "iter 44000 train_accuracy:0.725550\n",
+      "iter 46000 train_accuracy:0.610343\n",
+      "iter 48000 train_accuracy:0.751152\n",
+      "Done training, using time:(min) 2.5652570009231566\n",
+      "Done training\n",
+      "[-24.72967924 -82.53314759  -0.45824203 ...  71.2698941   77.80467792\n",
+      "  83.31726411]\n",
+      "training result\n",
+      "0.6226318484383001\n",
+      "test result\n",
+      "0.5315\n"
+     ]
+    }
+   ],
+   "source": [
+    "experiment(linear_kernel, X, y, X_test, y_test, regu_para=0, eta=0.01, tol=0.1)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 48,
+   "metadata": {},
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "Done kernel generating\n",
+      "iter 0 train_accuracy:0.520225\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      "/home/y247xie/.local/lib/python3.5/site-packages/ipykernel_launcher.py:3: RuntimeWarning: overflow encountered in exp\n",
+      "  This is separate from the ipykernel package so we can avoid doing imports until\n"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "iter 2000 train_accuracy:0.519713\n",
+      "iter 4000 train_accuracy:0.519713\n",
+      "iter 6000 train_accuracy:0.519713\n",
+      "iter 8000 train_accuracy:0.521249\n",
+      "iter 10000 train_accuracy:0.522273\n",
+      "iter 12000 train_accuracy:0.522273\n",
+      "iter 14000 train_accuracy:0.520225\n",
+      "iter 16000 train_accuracy:0.521249\n",
+      "iter 18000 train_accuracy:0.522785\n",
+      "Done training, using time:(min) 1.0691288113594055\n",
+      "Done training\n",
+      "[-0.00228032 -0.16220508 -0.16201477 ...  0.18145629  0.13888216\n",
+      "  0.15907172]\n",
+      "training result\n",
+      "0.4987199180747568\n",
+      "test result\n",
+      "0.5165\n"
+     ]
+    }
+   ],
+   "source": [
+    "experiment(linear_kernel, X, y, X_test, y_test, regu_para=1, eta=0.01, tol=0.01,max_iter=20000)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 29,
+   "metadata": {},
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "Done kernel generating\n",
+      "iter 0 train_accuracy:0.524322\n",
+      "iter 2000 train_accuracy:0.568356\n",
+      "iter 4000 train_accuracy:0.577573\n",
+      "iter 6000 train_accuracy:0.579109\n",
+      "iter 8000 train_accuracy:0.619048\n",
+      "iter 10000 train_accuracy:0.633385\n",
+      "iter 12000 train_accuracy:0.570405\n",
+      "iter 14000 train_accuracy:0.589350\n",
+      "iter 16000 train_accuracy:0.669739\n",
+      "iter 18000 train_accuracy:0.606759\n",
+      "iter 20000 train_accuracy:0.658986\n",
+      "iter 22000 train_accuracy:0.646697\n",
+      "iter 24000 train_accuracy:0.707117\n",
+      "iter 26000 train_accuracy:0.713262\n",
+      "iter 28000 train_accuracy:0.640553\n",
+      "iter 30000 train_accuracy:0.660522\n",
+      "iter 32000 train_accuracy:0.738863\n",
+      "iter 34000 train_accuracy:0.654378\n",
+      "iter 36000 train_accuracy:0.640041\n",
+      "iter 38000 train_accuracy:0.646185\n",
+      "iter 40000 train_accuracy:0.627752\n",
+      "iter 42000 train_accuracy:0.738351\n",
+      "iter 44000 train_accuracy:0.624680\n",
+      "iter 46000 train_accuracy:0.717870\n",
+      "iter 48000 train_accuracy:0.708141\n",
+      "Done training, using time:(min) 2.2449634432792664\n",
+      "Done training\n",
+      "[-2.55404882 -8.23323814 -0.05373824 ...  7.13329195  7.73501488\n",
+      "  8.32977632]\n",
+      "training result\n",
+      "0.6912442396313364\n",
+      "test result\n",
+      "0.534\n"
+     ]
+    }
+   ],
+   "source": [
+    "experiment(linear_kernel, X, y, X_test, y_test, regu_para=0, eta=0.001, tol=0.1)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 30,
+   "metadata": {},
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "Done kernel generating\n",
+      "iter 0 train_accuracy:0.520225\n",
+      "iter 2000 train_accuracy:0.573989\n",
+      "iter 4000 train_accuracy:0.589350\n",
+      "iter 6000 train_accuracy:0.585765\n",
+      "iter 8000 train_accuracy:0.628776\n",
+      "iter 10000 train_accuracy:0.636969\n",
+      "iter 12000 train_accuracy:0.589350\n",
+      "iter 14000 train_accuracy:0.619048\n",
+      "iter 16000 train_accuracy:0.652330\n",
+      "iter 18000 train_accuracy:0.619048\n",
+      "iter 20000 train_accuracy:0.658986\n",
+      "iter 22000 train_accuracy:0.704045\n",
+      "iter 24000 train_accuracy:0.644649\n",
+      "iter 26000 train_accuracy:0.737327\n",
+      "iter 28000 train_accuracy:0.651818\n",
+      "iter 30000 train_accuracy:0.704557\n",
+      "iter 32000 train_accuracy:0.758833\n",
+      "iter 34000 train_accuracy:0.693804\n",
+      "iter 36000 train_accuracy:0.630824\n",
+      "iter 38000 train_accuracy:0.663082\n",
+      "iter 40000 train_accuracy:0.694828\n",
+      "iter 42000 train_accuracy:0.706605\n",
+      "iter 44000 train_accuracy:0.714286\n",
+      "iter 46000 train_accuracy:0.692780\n",
+      "iter 48000 train_accuracy:0.691244\n",
+      "Done training, using time:(min) 2.2375803788503013\n",
+      "Done training\n",
+      "[-0.25375142 -0.80916862 -0.01319075 ...  0.704521    0.79774269\n",
+      "  0.83047695]\n",
+      "training result\n",
+      "0.6620583717357911\n",
+      "test result\n",
+      "0.531\n"
+     ]
+    }
+   ],
+   "source": [
+    "experiment(linear_kernel, X, y, X_test, y_test, regu_para=0, eta=0.0001, tol=0.1)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 31,
+   "metadata": {},
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "Done kernel generating\n",
+      "iter 0 train_accuracy:0.520225\n",
+      "iter 2000 train_accuracy:0.520737\n",
+      "iter 4000 train_accuracy:0.520225\n",
+      "iter 6000 train_accuracy:0.519713\n",
+      "iter 8000 train_accuracy:0.519713\n",
+      "iter 10000 train_accuracy:0.521249\n",
+      "iter 12000 train_accuracy:0.522273\n",
+      "iter 14000 train_accuracy:0.520737\n",
+      "iter 16000 train_accuracy:0.519201\n",
+      "iter 18000 train_accuracy:0.519713\n",
+      "iter 20000 train_accuracy:0.520225\n",
+      "iter 22000 train_accuracy:0.519713\n",
+      "iter 24000 train_accuracy:0.520225\n",
+      "iter 26000 train_accuracy:0.520225\n",
+      "iter 28000 train_accuracy:0.521761\n",
+      "iter 30000 train_accuracy:0.521761\n",
+      "iter 32000 train_accuracy:0.519713\n",
+      "iter 34000 train_accuracy:0.520225\n",
+      "iter 36000 train_accuracy:0.522273\n",
+      "iter 38000 train_accuracy:0.521761\n",
+      "iter 40000 train_accuracy:0.519713\n",
+      "iter 42000 train_accuracy:0.520737\n",
+      "iter 44000 train_accuracy:0.520225\n",
+      "iter 46000 train_accuracy:0.521761\n",
+      "iter 48000 train_accuracy:0.520737\n",
+      "Done training, using time:(min) 2.2182202696800233\n",
+      "Done training\n",
+      "[-0.00049907 -0.01286958 -0.01324424 ...  0.01414946  0.01492494\n",
+      "  0.00917827]\n",
+      "training result\n",
+      "0.49206349206349204\n",
+      "test result\n",
+      "0.5125\n"
+     ]
+    }
+   ],
+   "source": [
+    "experiment(linear_kernel, X, y, X_test, y_test, regu_para=10, eta=0.001, tol=0.1)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 32,
+   "metadata": {},
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "Done kernel generating\n",
+      "iter 0 train_accuracy:0.520225\n",
+      "iter 2000 train_accuracy:0.520225\n",
+      "iter 4000 train_accuracy:0.520225\n",
+      "iter 6000 train_accuracy:0.520225\n",
+      "iter 8000 train_accuracy:0.520225\n",
+      "iter 10000 train_accuracy:0.520225\n",
+      "iter 12000 train_accuracy:0.520225\n",
+      "iter 14000 train_accuracy:0.520225\n",
+      "iter 16000 train_accuracy:0.520225\n",
+      "iter 18000 train_accuracy:0.520225\n",
+      "iter 20000 train_accuracy:0.520225\n",
+      "iter 22000 train_accuracy:0.520225\n",
+      "iter 24000 train_accuracy:0.520225\n",
+      "iter 26000 train_accuracy:0.520225\n",
+      "iter 28000 train_accuracy:0.520225\n",
+      "iter 30000 train_accuracy:0.520225\n",
+      "iter 32000 train_accuracy:0.520225\n",
+      "iter 34000 train_accuracy:0.520225\n",
+      "iter 36000 train_accuracy:0.520225\n",
+      "iter 38000 train_accuracy:0.520225\n",
+      "iter 40000 train_accuracy:0.520225\n",
+      "iter 42000 train_accuracy:0.520225\n",
+      "iter 44000 train_accuracy:0.520225\n",
+      "iter 46000 train_accuracy:0.520225\n",
+      "iter 48000 train_accuracy:0.520225\n",
+      "Done training, using time:(min) 2.213572013378143\n",
+      "Done training\n",
+      "[-0.00146557 -0.00285996 -0.00867031 ...  0.00754734  0.00556321\n",
+      "  0.00673655]\n",
+      "training result\n",
+      "0.4838709677419355\n",
+      "test result\n",
+      "0.5055\n"
+     ]
+    }
+   ],
+   "source": [
+    "experiment(linear_kernel, X, y, X_test, y_test, regu_para=30, eta=0.001, tol=0.1)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 33,
+   "metadata": {
+    "scrolled": false
+   },
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "Done kernel generating\n",
+      "iter 0 train_accuracy:0.534562\n",
+      "iter 2000 train_accuracy:0.533026\n",
+      "iter 4000 train_accuracy:0.534562\n",
+      "iter 6000 train_accuracy:0.539171\n",
+      "iter 8000 train_accuracy:0.549411\n",
+      "iter 10000 train_accuracy:0.535074\n",
+      "iter 12000 train_accuracy:0.550435\n",
+      "iter 14000 train_accuracy:0.534562\n",
+      "iter 16000 train_accuracy:0.545827\n",
+      "iter 18000 train_accuracy:0.554019\n",
+      "iter 20000 train_accuracy:0.542755\n",
+      "iter 22000 train_accuracy:0.554019\n",
+      "iter 24000 train_accuracy:0.538658\n",
+      "iter 26000 train_accuracy:0.536610\n",
+      "iter 28000 train_accuracy:0.541219\n",
+      "iter 30000 train_accuracy:0.551971\n",
+      "iter 32000 train_accuracy:0.562724\n",
+      "iter 34000 train_accuracy:0.537122\n",
+      "iter 36000 train_accuracy:0.540195\n",
+      "iter 38000 train_accuracy:0.545827\n",
+      "iter 40000 train_accuracy:0.542243\n",
+      "iter 42000 train_accuracy:0.545315\n",
+      "iter 44000 train_accuracy:0.560164\n",
+      "iter 46000 train_accuracy:0.550947\n",
+      "iter 48000 train_accuracy:0.537634\n",
+      "Done training, using time:(min) 2.1733374913533527\n",
+      "Done training\n",
+      "[-0.15437237 -0.15523217 -0.006991   ...  0.15957007  0.1771946\n",
+      "  0.16405582]\n",
+      "training result\n",
+      "0.5176651305683564\n",
+      "test result\n",
+      "0.52\n"
+     ]
+    }
+   ],
+   "source": [
+    "experiment(linear_kernel, X, y, X_test, y_test, regu_para=1, eta=0.001, tol=0.1)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 44,
+   "metadata": {},
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "Done kernel generating\n",
+      "iter 0 train_accuracy:0.520225\n",
+      "iter 2000 train_accuracy:0.576037\n",
+      "iter 4000 train_accuracy:0.551459\n",
+      "iter 6000 train_accuracy:0.551971\n",
+      "iter 8000 train_accuracy:0.548899\n",
+      "iter 10000 train_accuracy:0.582181\n",
+      "iter 12000 train_accuracy:0.575013\n",
+      "iter 14000 train_accuracy:0.603687\n",
+      "iter 16000 train_accuracy:0.577573\n",
+      "iter 18000 train_accuracy:0.594982\n",
+      "iter 20000 train_accuracy:0.563748\n",
+      "iter 22000 train_accuracy:0.553507\n",
+      "iter 24000 train_accuracy:0.563748\n",
+      "iter 26000 train_accuracy:0.573477\n",
+      "iter 28000 train_accuracy:0.624680\n",
+      "iter 30000 train_accuracy:0.597542\n",
+      "iter 32000 train_accuracy:0.609319\n",
+      "iter 34000 train_accuracy:0.634409\n",
+      "iter 36000 train_accuracy:0.612391\n",
+      "iter 38000 train_accuracy:0.645673\n",
+      "iter 40000 train_accuracy:0.581157\n",
+      "iter 42000 train_accuracy:0.577573\n",
+      "iter 44000 train_accuracy:0.572965\n",
+      "iter 46000 train_accuracy:0.613415\n",
+      "iter 48000 train_accuracy:0.547363\n",
+      "Done training, using time:(min) 2.2342421571413675\n",
+      "Done training\n",
+      "[-1.07524982e+00 -1.67430242e+00 -3.39500117e-04 ...  1.61724321e+00\n",
+      "  1.62037729e+00  1.57183090e+00]\n",
+      "training result\n",
+      "0.576036866359447\n",
+      "test result\n",
+      "0.545\n"
+     ]
+    }
+   ],
+   "source": [
+    "experiment(linear_kernel, X, y, X_test, y_test, regu_para=0.1, eta=0.01, tol=0.1)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 45,
+   "metadata": {},
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "Done kernel generating\n",
+      "iter 0 train_accuracy:0.520225\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      "/home/y247xie/.local/lib/python3.5/site-packages/ipykernel_launcher.py:3: RuntimeWarning: overflow encountered in exp\n",
+      "  This is separate from the ipykernel package so we can avoid doing imports until\n"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "iter 2000 train_accuracy:0.537122\n",
+      "iter 4000 train_accuracy:0.524834\n",
+      "iter 6000 train_accuracy:0.536610\n",
+      "iter 8000 train_accuracy:0.534562\n",
+      "iter 10000 train_accuracy:0.529442\n",
+      "iter 12000 train_accuracy:0.532002\n",
+      "iter 14000 train_accuracy:0.529954\n",
+      "iter 16000 train_accuracy:0.537634\n",
+      "iter 18000 train_accuracy:0.535586\n",
+      "iter 20000 train_accuracy:0.538658\n",
+      "iter 22000 train_accuracy:0.532002\n",
+      "iter 24000 train_accuracy:0.529954\n",
+      "iter 26000 train_accuracy:0.538658\n",
+      "iter 28000 train_accuracy:0.532002\n",
+      "iter 30000 train_accuracy:0.525858\n",
+      "iter 32000 train_accuracy:0.529442\n",
+      "iter 34000 train_accuracy:0.531490\n",
+      "iter 36000 train_accuracy:0.525346\n",
+      "iter 38000 train_accuracy:0.533538\n",
+      "iter 40000 train_accuracy:0.533538\n",
+      "iter 42000 train_accuracy:0.536610\n",
+      "iter 44000 train_accuracy:0.525346\n",
+      "iter 46000 train_accuracy:0.535074\n",
+      "iter 48000 train_accuracy:0.529954\n",
+      "Done training, using time:(min) 2.690360891819\n",
+      "Done training\n",
+      "[-0.22515619 -0.55284273 -0.38739411 ...  0.57308675  0.60670647\n",
+      "  0.53357378]\n",
+      "training result\n",
+      "0.5058883768561188\n",
+      "test result\n",
+      "0.518\n"
+     ]
+    }
+   ],
+   "source": [
+    "experiment(linear_kernel, X, y, X_test, y_test, regu_para=0.3, eta=0.01, tol=0.1)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 46,
+   "metadata": {},
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "Done kernel generating\n",
+      "iter 0 train_accuracy:0.520225\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      "/home/y247xie/.local/lib/python3.5/site-packages/ipykernel_launcher.py:3: RuntimeWarning: overflow encountered in exp\n",
+      "  This is separate from the ipykernel package so we can avoid doing imports until\n"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "iter 2000 train_accuracy:0.556068\n",
+      "iter 4000 train_accuracy:0.562212\n",
+      "iter 6000 train_accuracy:0.591398\n",
+      "iter 8000 train_accuracy:0.626216\n",
+      "iter 10000 train_accuracy:0.592422\n",
+      "iter 12000 train_accuracy:0.587302\n",
+      "iter 14000 train_accuracy:0.592422\n",
+      "iter 16000 train_accuracy:0.616999\n",
+      "iter 18000 train_accuracy:0.603687\n",
+      "iter 20000 train_accuracy:0.603175\n",
+      "iter 22000 train_accuracy:0.565284\n",
+      "iter 24000 train_accuracy:0.625192\n",
+      "iter 26000 train_accuracy:0.617512\n",
+      "iter 28000 train_accuracy:0.595494\n",
+      "iter 30000 train_accuracy:0.602151\n",
+      "iter 32000 train_accuracy:0.595494\n",
+      "iter 34000 train_accuracy:0.586278\n",
+      "iter 36000 train_accuracy:0.598566\n",
+      "iter 38000 train_accuracy:0.572965\n",
+      "iter 40000 train_accuracy:0.614439\n",
+      "iter 42000 train_accuracy:0.623656\n",
+      "iter 44000 train_accuracy:0.603175\n",
+      "iter 46000 train_accuracy:0.577061\n",
+      "iter 48000 train_accuracy:0.571429\n",
+      "Done training, using time:(min) 2.6066909591356913\n",
+      "Done training\n",
+      "[-1.08921901e+01 -1.64344452e+01 -3.47382476e-03 ...  1.60878272e+01\n",
+      "  1.61031817e+01  1.65576711e+01]\n",
+      "training result\n",
+      "0.5499231950844854\n",
+      "test result\n",
+      "0.536\n"
+     ]
+    }
+   ],
+   "source": [
+    "experiment(linear_kernel, X, y, X_test, y_test, regu_para=0.01, eta=0.01, tol=0.1)"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "# gaussian kernel exps"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 40,
+   "metadata": {},
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "Done kernel generating\n",
+      "iter 0 train_accuracy:0.520225\n",
+      "iter 2000 train_accuracy:0.601639\n",
+      "iter 4000 train_accuracy:0.612391\n",
+      "iter 6000 train_accuracy:0.596006\n",
+      "iter 8000 train_accuracy:0.603175\n",
+      "iter 10000 train_accuracy:0.590886\n",
+      "iter 12000 train_accuracy:0.603175\n",
+      "iter 14000 train_accuracy:0.556580\n",
+      "iter 16000 train_accuracy:0.567332\n",
+      "iter 18000 train_accuracy:0.611879\n",
+      "iter 20000 train_accuracy:0.562724\n",
+      "iter 22000 train_accuracy:0.605223\n",
+      "iter 24000 train_accuracy:0.608295\n",
+      "iter 26000 train_accuracy:0.600614\n",
+      "iter 28000 train_accuracy:0.582181\n",
+      "iter 30000 train_accuracy:0.604711\n",
+      "iter 32000 train_accuracy:0.605223\n",
+      "iter 34000 train_accuracy:0.612903\n",
+      "iter 36000 train_accuracy:0.610343\n",
+      "iter 38000 train_accuracy:0.608295\n",
+      "iter 40000 train_accuracy:0.596518\n",
+      "iter 42000 train_accuracy:0.612391\n",
+      "iter 44000 train_accuracy:0.603687\n",
+      "iter 46000 train_accuracy:0.605223\n",
+      "iter 48000 train_accuracy:0.601126\n",
+      "Done training, using time:(min) 2.2019865552584332\n",
+      "Done training\n",
+      "[-1.21471422 -1.67036781 -1.34451458 ...  1.84904955  1.47290714\n",
+      "  1.53931509]\n",
+      "training result\n",
+      "0.5954941116231439\n",
+      "test result\n",
+      "0.5805\n"
+     ]
+    }
+   ],
+   "source": [
+    "experiment(gaussian_kernel, X, y, X_test, y_test, regu_para=0.1, eta=0.01, tol=0.1)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 49,
+   "metadata": {},
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "Done kernel generating\n",
+      "iter 0 train_accuracy:0.520225\n",
+      "iter 2000 train_accuracy:0.585253\n",
+      "iter 4000 train_accuracy:0.589350\n",
+      "iter 6000 train_accuracy:0.600614\n",
+      "iter 8000 train_accuracy:0.589350\n",
+      "iter 10000 train_accuracy:0.594470\n",
+      "iter 12000 train_accuracy:0.593958\n",
+      "iter 14000 train_accuracy:0.593958\n",
+      "iter 16000 train_accuracy:0.593958\n",
+      "iter 18000 train_accuracy:0.604199\n",
+      "iter 20000 train_accuracy:0.592934\n",
+      "iter 22000 train_accuracy:0.595494\n",
+      "iter 24000 train_accuracy:0.593446\n",
+      "iter 26000 train_accuracy:0.603175\n",
+      "iter 28000 train_accuracy:0.592934\n",
+      "iter 30000 train_accuracy:0.597542\n",
+      "iter 32000 train_accuracy:0.596006\n",
+      "iter 34000 train_accuracy:0.594470\n",
+      "iter 36000 train_accuracy:0.596006\n",
+      "iter 38000 train_accuracy:0.594470\n",
+      "iter 40000 train_accuracy:0.591398\n",
+      "iter 42000 train_accuracy:0.594982\n",
+      "iter 44000 train_accuracy:0.593446\n",
+      "iter 46000 train_accuracy:0.594470\n",
+      "iter 48000 train_accuracy:0.598054\n",
+      "Done training, using time:(min) 2.2161025166511537\n",
+      "Done training\n",
+      "[-0.43570644 -0.56634806 -0.46884925 ...  0.61004497  0.51502695\n",
+      "  0.51873271]\n",
+      "training result\n",
+      "0.5960061443932412\n",
+      "test result\n",
+      "0.572\n"
+     ]
+    }
+   ],
+   "source": [
+    "experiment(gaussian_kernel, X, y, X_test, y_test, regu_para=0.3, eta=0.001, tol=0.1)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 35,
+   "metadata": {},
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "Done kernel generating\n",
+      "iter 0 train_accuracy:0.520225\n",
+      "iter 2000 train_accuracy:0.556580\n",
+      "iter 4000 train_accuracy:0.564772\n",
+      "iter 6000 train_accuracy:0.585253\n",
+      "iter 8000 train_accuracy:0.573989\n",
+      "iter 10000 train_accuracy:0.582693\n",
+      "iter 12000 train_accuracy:0.565284\n",
+      "iter 14000 train_accuracy:0.557092\n",
+      "iter 16000 train_accuracy:0.579621\n",
+      "iter 18000 train_accuracy:0.568868\n",
+      "iter 20000 train_accuracy:0.564772\n",
+      "iter 22000 train_accuracy:0.571941\n",
+      "iter 24000 train_accuracy:0.562212\n",
+      "iter 26000 train_accuracy:0.572453\n",
+      "iter 28000 train_accuracy:0.584229\n",
+      "iter 30000 train_accuracy:0.569892\n",
+      "iter 32000 train_accuracy:0.570917\n",
+      "iter 34000 train_accuracy:0.556580\n",
+      "iter 36000 train_accuracy:0.566820\n",
+      "iter 38000 train_accuracy:0.563236\n",
+      "iter 40000 train_accuracy:0.585253\n",
+      "iter 42000 train_accuracy:0.571941\n",
+      "iter 44000 train_accuracy:0.565284\n",
+      "iter 46000 train_accuracy:0.554019\n",
+      "iter 48000 train_accuracy:0.555556\n",
+      "Done training, using time:(min) 2.2260678807894387\n",
+      "Done training\n",
+      "[-0.14191776 -0.16183555 -0.15345055 ...  0.18026807  0.1622929\n",
+      "  0.15956562]\n",
+      "training result\n",
+      "0.5698924731182796\n",
+      "test result\n",
+      "0.5715\n"
+     ]
+    }
+   ],
+   "source": [
+    "experiment(gaussian_kernel, X, y, X_test, y_test, regu_para=1, eta=0.001, tol=0.1)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 36,
+   "metadata": {},
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "Done kernel generating\n",
+      "iter 0 train_accuracy:0.479775\n",
+      "iter 2000 train_accuracy:0.520225\n",
+      "iter 4000 train_accuracy:0.520225\n",
+      "iter 6000 train_accuracy:0.520225\n",
+      "iter 8000 train_accuracy:0.520225\n",
+      "iter 10000 train_accuracy:0.520225\n",
+      "iter 12000 train_accuracy:0.520225\n",
+      "iter 14000 train_accuracy:0.520225\n",
+      "iter 16000 train_accuracy:0.520225\n",
+      "iter 18000 train_accuracy:0.520225\n",
+      "iter 20000 train_accuracy:0.520225\n",
+      "iter 22000 train_accuracy:0.520225\n",
+      "iter 24000 train_accuracy:0.520225\n",
+      "iter 26000 train_accuracy:0.520225\n",
+      "iter 28000 train_accuracy:0.520225\n",
+      "iter 30000 train_accuracy:0.520225\n",
+      "iter 32000 train_accuracy:0.520225\n",
+      "iter 34000 train_accuracy:0.520225\n",
+      "iter 36000 train_accuracy:0.520225\n",
+      "iter 38000 train_accuracy:0.520225\n",
+      "iter 40000 train_accuracy:0.520225\n",
+      "iter 42000 train_accuracy:0.520225\n",
+      "iter 44000 train_accuracy:0.520225\n",
+      "iter 46000 train_accuracy:0.520225\n",
+      "iter 48000 train_accuracy:0.520225\n",
+      "Done training, using time:(min) 2.260877780119578\n",
+      "Done training\n",
+      "[-0.01481768 -0.01459545 -0.01419502 ...  0.01818929  0.01809925\n",
+      "  0.01716167]\n",
+      "training result\n",
+      "0.5202252944188428\n",
+      "test result\n",
+      "0.5\n"
+     ]
+    }
+   ],
+   "source": [
+    "experiment(gaussian_kernel, X, y, X_test, y_test, regu_para=10, eta=0.001, tol=0.1)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 34,
+   "metadata": {},
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "Done kernel generating\n",
+      "iter 0 train_accuracy:0.520225\n",
+      "iter 2000 train_accuracy:0.585765\n",
+      "iter 4000 train_accuracy:0.602151\n",
+      "iter 6000 train_accuracy:0.602663\n",
+      "iter 8000 train_accuracy:0.598054\n",
+      "iter 10000 train_accuracy:0.603175\n",
+      "iter 12000 train_accuracy:0.606247\n",
+      "iter 14000 train_accuracy:0.605735\n",
+      "iter 16000 train_accuracy:0.610855\n",
+      "iter 18000 train_accuracy:0.612391\n",
+      "iter 20000 train_accuracy:0.612903\n",
+      "iter 22000 train_accuracy:0.617512\n",
+      "iter 24000 train_accuracy:0.616999\n",
+      "iter 26000 train_accuracy:0.618536\n",
+      "iter 28000 train_accuracy:0.622632\n",
+      "iter 30000 train_accuracy:0.625192\n",
+      "iter 32000 train_accuracy:0.623656\n",
+      "iter 34000 train_accuracy:0.622632\n",
+      "iter 36000 train_accuracy:0.626216\n",
+      "iter 38000 train_accuracy:0.627240\n",
+      "iter 40000 train_accuracy:0.629288\n",
+      "iter 42000 train_accuracy:0.633385\n",
+      "iter 44000 train_accuracy:0.634409\n",
+      "iter 46000 train_accuracy:0.632873\n",
+      "iter 48000 train_accuracy:0.634409\n",
+      "Done training, using time:(min) 2.194558862845103\n",
+      "Done training\n",
+      "[-5.4906544  -8.88665359 -5.54955064 ...  9.62636094  7.49341829\n",
+      "  8.07615227]\n",
+      "training result\n",
+      "0.6364567332309268\n",
+      "test result\n",
+      "0.597\n"
+     ]
+    }
+   ],
+   "source": [
+    "experiment(gaussian_kernel, X, y, X_test, y_test, regu_para=0, eta=0.001, tol=0.1)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 41,
+   "metadata": {},
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "Done kernel generating\n",
+      "iter 0 train_accuracy:0.520225\n",
+      "iter 2000 train_accuracy:0.600614\n",
+      "iter 4000 train_accuracy:0.583205\n",
+      "iter 6000 train_accuracy:0.559652\n",
+      "iter 8000 train_accuracy:0.594982\n",
+      "iter 10000 train_accuracy:0.536098\n",
+      "iter 12000 train_accuracy:0.595494\n",
+      "iter 14000 train_accuracy:0.563236\n",
+      "iter 16000 train_accuracy:0.575013\n",
+      "iter 18000 train_accuracy:0.602151\n",
+      "iter 20000 train_accuracy:0.565284\n",
+      "iter 22000 train_accuracy:0.596006\n",
+      "iter 24000 train_accuracy:0.576037\n",
+      "iter 26000 train_accuracy:0.578085\n",
+      "iter 28000 train_accuracy:0.559652\n",
+      "iter 30000 train_accuracy:0.603175\n",
+      "iter 32000 train_accuracy:0.554019\n",
+      "iter 34000 train_accuracy:0.602151\n",
+      "iter 36000 train_accuracy:0.569892\n",
+      "iter 38000 train_accuracy:0.573477\n",
+      "iter 40000 train_accuracy:0.589862\n",
+      "iter 42000 train_accuracy:0.540707\n",
+      "iter 44000 train_accuracy:0.573989\n",
+      "iter 46000 train_accuracy:0.589350\n",
+      "iter 48000 train_accuracy:0.590374\n",
+      "Done training, using time:(min) 2.2309987624486287\n",
+      "Done training\n",
+      "[-0.47322899 -0.58491732 -0.4929542  ...  0.60764742  0.51055701\n",
+      "  0.49927595]\n",
+      "training result\n",
+      "0.590373783922171\n",
+      "test result\n",
+      "0.5845\n"
+     ]
+    }
+   ],
+   "source": [
+    "experiment(gaussian_kernel, X, y, X_test, y_test, regu_para=0.3, eta=0.01, tol=0.01)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 47,
+   "metadata": {},
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "Done kernel generating\n",
+      "iter 0 train_accuracy:0.520225\n",
+      "iter 2000 train_accuracy:0.587814\n",
+      "iter 4000 train_accuracy:0.600102\n",
+      "iter 6000 train_accuracy:0.603687\n",
+      "iter 8000 train_accuracy:0.602663\n",
+      "iter 10000 train_accuracy:0.600614\n",
+      "iter 12000 train_accuracy:0.609319\n",
+      "iter 14000 train_accuracy:0.609319\n",
+      "iter 16000 train_accuracy:0.609831\n",
+      "iter 18000 train_accuracy:0.611367\n",
+      "iter 20000 train_accuracy:0.616999\n",
+      "iter 22000 train_accuracy:0.621096\n",
+      "iter 24000 train_accuracy:0.618536\n",
+      "iter 26000 train_accuracy:0.618024\n",
+      "iter 28000 train_accuracy:0.624168\n",
+      "iter 30000 train_accuracy:0.627240\n",
+      "iter 32000 train_accuracy:0.621096\n",
+      "iter 34000 train_accuracy:0.628264\n",
+      "iter 36000 train_accuracy:0.628264\n",
+      "iter 38000 train_accuracy:0.627752\n",
+      "iter 40000 train_accuracy:0.630312\n",
+      "iter 42000 train_accuracy:0.632873\n",
+      "iter 44000 train_accuracy:0.630312\n",
+      "iter 46000 train_accuracy:0.633897\n",
+      "iter 48000 train_accuracy:0.634409\n",
+      "iter 50000 train_accuracy:0.636457\n",
+      "iter 52000 train_accuracy:0.636969\n",
+      "iter 54000 train_accuracy:0.637481\n",
+      "iter 56000 train_accuracy:0.636457\n",
+      "iter 58000 train_accuracy:0.640553\n",
+      "iter 60000 train_accuracy:0.641577\n",
+      "iter 62000 train_accuracy:0.637993\n",
+      "iter 64000 train_accuracy:0.639017\n",
+      "iter 66000 train_accuracy:0.642601\n",
+      "iter 68000 train_accuracy:0.642089\n",
+      "iter 70000 train_accuracy:0.642601\n",
+      "iter 72000 train_accuracy:0.643625\n",
+      "iter 74000 train_accuracy:0.645161\n",
+      "iter 76000 train_accuracy:0.644649\n",
+      "iter 78000 train_accuracy:0.643625\n",
+      "iter 80000 train_accuracy:0.646697\n",
+      "iter 82000 train_accuracy:0.645673\n",
+      "iter 84000 train_accuracy:0.647721\n",
+      "iter 86000 train_accuracy:0.647721\n",
+      "iter 88000 train_accuracy:0.648746\n",
+      "iter 90000 train_accuracy:0.650282\n",
+      "iter 92000 train_accuracy:0.650794\n",
+      "iter 94000 train_accuracy:0.644649\n",
+      "iter 96000 train_accuracy:0.653354\n",
+      "iter 98000 train_accuracy:0.644649\n",
+      "iter 100000 train_accuracy:0.652842\n",
+      "iter 102000 train_accuracy:0.647721\n",
+      "iter 104000 train_accuracy:0.652842\n",
+      "iter 106000 train_accuracy:0.653354\n",
+      "iter 108000 train_accuracy:0.646185\n",
+      "iter 110000 train_accuracy:0.654890\n",
+      "iter 112000 train_accuracy:0.655402\n",
+      "iter 114000 train_accuracy:0.657450\n",
+      "iter 116000 train_accuracy:0.658986\n",
+      "iter 118000 train_accuracy:0.657450\n",
+      "iter 120000 train_accuracy:0.655914\n",
+      "iter 122000 train_accuracy:0.653866\n",
+      "iter 124000 train_accuracy:0.662058\n",
+      "iter 126000 train_accuracy:0.658986\n",
+      "iter 128000 train_accuracy:0.658986\n",
+      "iter 130000 train_accuracy:0.658986\n",
+      "iter 132000 train_accuracy:0.655914\n",
+      "iter 134000 train_accuracy:0.661546\n",
+      "iter 136000 train_accuracy:0.662058\n",
+      "iter 138000 train_accuracy:0.662058\n",
+      "iter 140000 train_accuracy:0.664107\n",
+      "iter 142000 train_accuracy:0.662570\n",
+      "iter 144000 train_accuracy:0.662570\n",
+      "iter 146000 train_accuracy:0.662570\n",
+      "iter 148000 train_accuracy:0.667179\n",
+      "iter 150000 train_accuracy:0.666667\n",
+      "iter 152000 train_accuracy:0.666667\n",
+      "iter 154000 train_accuracy:0.663082\n",
+      "iter 156000 train_accuracy:0.668715\n",
+      "iter 158000 train_accuracy:0.669227\n",
+      "iter 160000 train_accuracy:0.668715\n",
+      "iter 162000 train_accuracy:0.668203\n",
+      "iter 164000 train_accuracy:0.668715\n",
+      "iter 166000 train_accuracy:0.670763\n",
+      "iter 168000 train_accuracy:0.668715\n",
+      "iter 170000 train_accuracy:0.672811\n",
+      "iter 172000 train_accuracy:0.669739\n",
+      "iter 174000 train_accuracy:0.673323\n",
+      "iter 176000 train_accuracy:0.664107\n",
+      "iter 178000 train_accuracy:0.664619\n",
+      "iter 180000 train_accuracy:0.672811\n",
+      "iter 182000 train_accuracy:0.670763\n",
+      "iter 184000 train_accuracy:0.675371\n",
+      "iter 186000 train_accuracy:0.676395\n",
+      "iter 188000 train_accuracy:0.672811\n",
+      "iter 190000 train_accuracy:0.675883\n",
+      "iter 192000 train_accuracy:0.672299\n",
+      "iter 194000 train_accuracy:0.671787\n",
+      "iter 196000 train_accuracy:0.673835\n",
+      "iter 198000 train_accuracy:0.670251\n",
+      "iter 200000 train_accuracy:0.676395\n",
+      "iter 202000 train_accuracy:0.676907\n",
+      "iter 204000 train_accuracy:0.677419\n",
+      "iter 206000 train_accuracy:0.675883\n",
+      "iter 208000 train_accuracy:0.672299\n",
+      "iter 210000 train_accuracy:0.678443\n",
+      "iter 212000 train_accuracy:0.675883\n",
+      "iter 214000 train_accuracy:0.673323\n",
+      "iter 216000 train_accuracy:0.673323\n",
+      "iter 218000 train_accuracy:0.673323\n",
+      "iter 220000 train_accuracy:0.675371\n",
+      "iter 222000 train_accuracy:0.676907\n",
+      "iter 224000 train_accuracy:0.677419\n",
+      "iter 226000 train_accuracy:0.678443\n",
+      "iter 228000 train_accuracy:0.676907\n",
+      "iter 230000 train_accuracy:0.678955\n",
+      "iter 232000 train_accuracy:0.676907\n",
+      "iter 234000 train_accuracy:0.677931\n",
+      "iter 236000 train_accuracy:0.678443\n",
+      "iter 238000 train_accuracy:0.679980\n",
+      "iter 240000 train_accuracy:0.681516\n",
+      "iter 242000 train_accuracy:0.680492\n",
+      "iter 244000 train_accuracy:0.679467\n",
+      "iter 246000 train_accuracy:0.681516\n",
+      "iter 248000 train_accuracy:0.682540\n",
+      "iter 250000 train_accuracy:0.681516\n",
+      "iter 252000 train_accuracy:0.683564\n",
+      "iter 254000 train_accuracy:0.683564\n",
+      "iter 256000 train_accuracy:0.681004\n",
+      "iter 258000 train_accuracy:0.681516\n",
+      "iter 260000 train_accuracy:0.682540\n",
+      "iter 262000 train_accuracy:0.683052\n",
+      "iter 264000 train_accuracy:0.684076\n",
+      "iter 266000 train_accuracy:0.683052\n",
+      "iter 268000 train_accuracy:0.683564\n",
+      "iter 270000 train_accuracy:0.683564\n",
+      "iter 272000 train_accuracy:0.684076\n",
+      "iter 274000 train_accuracy:0.684588\n",
+      "iter 276000 train_accuracy:0.687660\n",
+      "iter 278000 train_accuracy:0.686124\n",
+      "iter 280000 train_accuracy:0.684588\n",
+      "iter 282000 train_accuracy:0.687660\n",
+      "iter 284000 train_accuracy:0.686636\n",
+      "iter 286000 train_accuracy:0.685100\n",
+      "iter 288000 train_accuracy:0.687660\n",
+      "iter 290000 train_accuracy:0.688684\n",
+      "iter 292000 train_accuracy:0.689196\n",
+      "iter 294000 train_accuracy:0.688684\n",
+      "iter 296000 train_accuracy:0.683052\n",
+      "iter 298000 train_accuracy:0.689708\n",
+      "iter 300000 train_accuracy:0.687148\n",
+      "iter 302000 train_accuracy:0.689196\n",
+      "iter 304000 train_accuracy:0.690732\n",
+      "iter 306000 train_accuracy:0.688684\n",
+      "iter 308000 train_accuracy:0.690220\n",
+      "iter 310000 train_accuracy:0.686636\n",
+      "iter 312000 train_accuracy:0.688684\n",
+      "iter 314000 train_accuracy:0.690732\n",
+      "iter 316000 train_accuracy:0.692780\n",
+      "iter 318000 train_accuracy:0.690220\n",
+      "iter 320000 train_accuracy:0.690220\n",
+      "iter 322000 train_accuracy:0.689708\n",
+      "iter 324000 train_accuracy:0.690732\n",
+      "iter 326000 train_accuracy:0.690220\n",
+      "iter 328000 train_accuracy:0.692268\n",
+      "iter 330000 train_accuracy:0.690732\n",
+      "iter 332000 train_accuracy:0.690220\n",
+      "iter 334000 train_accuracy:0.690732\n",
+      "iter 336000 train_accuracy:0.694316\n",
+      "iter 338000 train_accuracy:0.690220\n",
+      "iter 340000 train_accuracy:0.689708\n",
+      "iter 342000 train_accuracy:0.695341\n",
+      "iter 344000 train_accuracy:0.691756\n",
+      "iter 346000 train_accuracy:0.694316\n",
+      "iter 348000 train_accuracy:0.695341\n",
+      "iter 350000 train_accuracy:0.695341\n",
+      "iter 352000 train_accuracy:0.693292\n",
+      "iter 354000 train_accuracy:0.693292\n",
+      "iter 356000 train_accuracy:0.692268\n",
+      "iter 358000 train_accuracy:0.690220\n",
+      "iter 360000 train_accuracy:0.693804\n",
+      "iter 362000 train_accuracy:0.695853\n",
+      "iter 364000 train_accuracy:0.698413\n",
+      "iter 366000 train_accuracy:0.696877\n",
+      "iter 368000 train_accuracy:0.693804\n",
+      "iter 370000 train_accuracy:0.695341\n",
+      "iter 372000 train_accuracy:0.693804\n",
+      "iter 374000 train_accuracy:0.695853\n",
+      "iter 376000 train_accuracy:0.698413\n",
+      "iter 378000 train_accuracy:0.698413\n",
+      "iter 380000 train_accuracy:0.695341\n",
+      "iter 382000 train_accuracy:0.696877\n",
+      "iter 384000 train_accuracy:0.697901\n",
+      "iter 386000 train_accuracy:0.696365\n",
+      "iter 388000 train_accuracy:0.698413\n",
+      "iter 390000 train_accuracy:0.695853\n",
+      "iter 392000 train_accuracy:0.697389\n",
+      "iter 394000 train_accuracy:0.695341\n",
+      "iter 396000 train_accuracy:0.697389\n",
+      "iter 398000 train_accuracy:0.699949\n",
+      "iter 400000 train_accuracy:0.698413\n",
+      "iter 402000 train_accuracy:0.697901\n",
+      "iter 404000 train_accuracy:0.696877\n",
+      "iter 406000 train_accuracy:0.700461\n",
+      "iter 408000 train_accuracy:0.696877\n",
+      "iter 410000 train_accuracy:0.698413\n",
+      "iter 412000 train_accuracy:0.698413\n",
+      "iter 414000 train_accuracy:0.698925\n",
+      "iter 416000 train_accuracy:0.697901\n",
+      "iter 418000 train_accuracy:0.698925\n",
+      "iter 420000 train_accuracy:0.700973\n",
+      "iter 422000 train_accuracy:0.699437\n",
+      "iter 424000 train_accuracy:0.700461\n",
+      "iter 426000 train_accuracy:0.700973\n",
+      "iter 428000 train_accuracy:0.696877\n",
+      "iter 430000 train_accuracy:0.701485\n",
+      "iter 432000 train_accuracy:0.700461\n",
+      "iter 434000 train_accuracy:0.700461\n",
+      "iter 436000 train_accuracy:0.700973\n",
+      "iter 438000 train_accuracy:0.700973\n",
+      "iter 440000 train_accuracy:0.700973\n",
+      "iter 442000 train_accuracy:0.703533\n",
+      "iter 444000 train_accuracy:0.701485\n",
+      "iter 446000 train_accuracy:0.701485\n",
+      "iter 448000 train_accuracy:0.704045\n",
+      "iter 450000 train_accuracy:0.704557\n",
+      "iter 452000 train_accuracy:0.704557\n",
+      "iter 454000 train_accuracy:0.700973\n",
+      "iter 456000 train_accuracy:0.704557\n"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "iter 458000 train_accuracy:0.702509\n",
+      "iter 460000 train_accuracy:0.705069\n",
+      "iter 462000 train_accuracy:0.705581\n",
+      "iter 464000 train_accuracy:0.707629\n",
+      "iter 466000 train_accuracy:0.703533\n",
+      "iter 468000 train_accuracy:0.704557\n",
+      "iter 470000 train_accuracy:0.704557\n",
+      "iter 472000 train_accuracy:0.707629\n",
+      "iter 474000 train_accuracy:0.705069\n",
+      "iter 476000 train_accuracy:0.704557\n",
+      "iter 478000 train_accuracy:0.707117\n",
+      "iter 480000 train_accuracy:0.706605\n",
+      "iter 482000 train_accuracy:0.706605\n",
+      "iter 484000 train_accuracy:0.707117\n",
+      "iter 486000 train_accuracy:0.706605\n",
+      "iter 488000 train_accuracy:0.706605\n",
+      "iter 490000 train_accuracy:0.703533\n",
+      "iter 492000 train_accuracy:0.705581\n",
+      "iter 494000 train_accuracy:0.706605\n",
+      "iter 496000 train_accuracy:0.710701\n",
+      "iter 498000 train_accuracy:0.708141\n",
+      "Done training, using time:(min) 22.358522486686706\n",
+      "Done training\n",
+      "[-51.77448543 -85.54993795 -35.28667167 ...  92.3613971   76.3212428\n",
+      "  87.38571095]\n",
+      "training result\n",
+      "0.7081413210445469\n",
+      "test result\n",
+      "0.599\n"
+     ]
+    }
+   ],
+   "source": [
+    "experiment(gaussian_kernel, X, y, X_test, y_test, regu_para=0, eta=0.001, tol=0.1,max_iter=500000)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 42,
+   "metadata": {},
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "Done kernel generating\n",
+      "iter 0 train_accuracy:0.520225\n",
+      "iter 2000 train_accuracy:0.589862\n",
+      "iter 4000 train_accuracy:0.599590\n",
+      "iter 6000 train_accuracy:0.601639\n",
+      "iter 8000 train_accuracy:0.602151\n",
+      "iter 10000 train_accuracy:0.601639\n",
+      "iter 12000 train_accuracy:0.603687\n",
+      "iter 14000 train_accuracy:0.609319\n",
+      "iter 16000 train_accuracy:0.610343\n",
+      "iter 18000 train_accuracy:0.610855\n",
+      "iter 20000 train_accuracy:0.612903\n",
+      "iter 22000 train_accuracy:0.617512\n",
+      "iter 24000 train_accuracy:0.615975\n",
+      "iter 26000 train_accuracy:0.618536\n",
+      "iter 28000 train_accuracy:0.619048\n",
+      "iter 30000 train_accuracy:0.619560\n",
+      "iter 32000 train_accuracy:0.618536\n",
+      "iter 34000 train_accuracy:0.619048\n",
+      "iter 36000 train_accuracy:0.618536\n",
+      "iter 38000 train_accuracy:0.624680\n",
+      "iter 40000 train_accuracy:0.620072\n",
+      "iter 42000 train_accuracy:0.627240\n",
+      "iter 44000 train_accuracy:0.626216\n",
+      "iter 46000 train_accuracy:0.627752\n",
+      "iter 48000 train_accuracy:0.629288\n",
+      "Done training, using time:(min) 2.177192775408427\n",
+      "Done training\n",
+      "[-4.40544097 -7.00185946 -4.49301202 ...  7.57443077  5.89439894\n",
+      "  6.26651624]\n",
+      "training result\n",
+      "0.6282642089093702\n",
+      "test result\n",
+      "0.5975\n"
+     ]
+    }
+   ],
+   "source": [
+    "experiment(gaussian_kernel, X, y, X_test, y_test, regu_para=0.01, eta=0.001, tol=0.01)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 43,
+   "metadata": {},
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "Done kernel generating\n",
+      "iter 0 train_accuracy:0.520225\n",
+      "iter 2000 train_accuracy:0.520225\n",
+      "iter 4000 train_accuracy:0.527906\n",
+      "iter 6000 train_accuracy:0.548899\n",
+      "iter 8000 train_accuracy:0.562724\n",
+      "iter 10000 train_accuracy:0.573989\n",
+      "iter 12000 train_accuracy:0.580645\n",
+      "iter 14000 train_accuracy:0.583717\n",
+      "iter 16000 train_accuracy:0.583717\n",
+      "iter 18000 train_accuracy:0.586278\n",
+      "iter 20000 train_accuracy:0.585765\n",
+      "iter 22000 train_accuracy:0.589350\n",
+      "iter 24000 train_accuracy:0.588326\n",
+      "iter 26000 train_accuracy:0.590374\n",
+      "iter 28000 train_accuracy:0.591398\n",
+      "iter 30000 train_accuracy:0.592934\n",
+      "iter 32000 train_accuracy:0.595494\n",
+      "iter 34000 train_accuracy:0.596518\n",
+      "iter 36000 train_accuracy:0.594470\n",
+      "iter 38000 train_accuracy:0.600102\n",
+      "iter 40000 train_accuracy:0.603175\n",
+      "iter 42000 train_accuracy:0.601639\n",
+      "iter 44000 train_accuracy:0.603687\n",
+      "iter 46000 train_accuracy:0.601126\n",
+      "iter 48000 train_accuracy:0.603175\n",
+      "Done training, using time:(min) 2.219695496559143\n",
+      "Done training\n",
+      "[-0.66279991 -0.82804417 -0.72267349 ...  0.90140771  0.78432805\n",
+      "  0.80048814]\n",
+      "training result\n",
+      "0.601126472094214\n",
+      "test result\n",
+      "0.576\n"
+     ]
+    }
+   ],
+   "source": [
+    "experiment(gaussian_kernel, X, y, X_test, y_test, regu_para=0, eta=0.0001, tol=0.01)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 52,
+   "metadata": {},
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "Done kernel generating\n",
+      "iter 0 train_accuracy:0.520225\n",
+      "iter 2000 train_accuracy:0.529442\n",
+      "iter 4000 train_accuracy:0.542243\n",
+      "iter 6000 train_accuracy:0.545827\n",
+      "iter 8000 train_accuracy:0.546339\n",
+      "iter 10000 train_accuracy:0.549923\n",
+      "iter 12000 train_accuracy:0.546851\n",
+      "iter 14000 train_accuracy:0.563236\n",
+      "iter 16000 train_accuracy:0.557092\n",
+      "iter 18000 train_accuracy:0.567844\n",
+      "iter 20000 train_accuracy:0.549923\n",
+      "iter 22000 train_accuracy:0.570405\n",
+      "iter 24000 train_accuracy:0.546339\n",
+      "iter 26000 train_accuracy:0.576549\n",
+      "iter 28000 train_accuracy:0.552483\n",
+      "iter 30000 train_accuracy:0.572965\n",
+      "iter 32000 train_accuracy:0.567844\n",
+      "iter 34000 train_accuracy:0.558628\n",
+      "iter 36000 train_accuracy:0.558628\n",
+      "iter 38000 train_accuracy:0.560164\n",
+      "iter 40000 train_accuracy:0.607783\n",
+      "iter 42000 train_accuracy:0.575525\n",
+      "iter 44000 train_accuracy:0.554019\n",
+      "iter 46000 train_accuracy:0.588838\n",
+      "iter 48000 train_accuracy:0.564260\n",
+      "Done training, using time:(min) 2.206505878766378\n",
+      "Done training\n",
+      "[-7002.24018911 -8274.49835721  -695.81322716 ...  8147.98728868\n",
+      "  8156.47463128  8184.00000031]\n",
+      "training result\n",
+      "0.5499231950844854\n",
+      "test result\n",
+      "0.537\n"
+     ]
+    }
+   ],
+   "source": [
+    "experiment(gaussian_kernel, X, y, X_test, y_test, regu_para=0, eta=1, tol=0.001)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 53,
+   "metadata": {},
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "Done kernel generating\n",
+      "iter 0 train_accuracy:0.520225\n",
+      "iter 2000 train_accuracy:0.520737\n",
+      "iter 4000 train_accuracy:0.529954\n",
+      "iter 6000 train_accuracy:0.556580\n",
+      "iter 8000 train_accuracy:0.563748\n",
+      "iter 10000 train_accuracy:0.568868\n",
+      "iter 12000 train_accuracy:0.580645\n",
+      "iter 14000 train_accuracy:0.582181\n",
+      "iter 16000 train_accuracy:0.581669\n",
+      "iter 18000 train_accuracy:0.586278\n",
+      "iter 20000 train_accuracy:0.590886\n",
+      "iter 22000 train_accuracy:0.588838\n",
+      "iter 24000 train_accuracy:0.589350\n",
+      "iter 26000 train_accuracy:0.592422\n",
+      "iter 28000 train_accuracy:0.590886\n",
+      "iter 30000 train_accuracy:0.592934\n",
+      "iter 32000 train_accuracy:0.597542\n",
+      "iter 34000 train_accuracy:0.595494\n",
+      "iter 36000 train_accuracy:0.594982\n",
+      "iter 38000 train_accuracy:0.597542\n",
+      "iter 40000 train_accuracy:0.600102\n",
+      "iter 42000 train_accuracy:0.600102\n",
+      "iter 44000 train_accuracy:0.599590\n",
+      "iter 46000 train_accuracy:0.602151\n",
+      "iter 48000 train_accuracy:0.604711\n",
+      "Done training, using time:(min) 2.2074294567108153\n",
+      "Done training\n",
+      "[-0.60310069 -0.77834608 -0.65930034 ...  0.83553845  0.72931847\n",
+      "  0.73440081]\n",
+      "training result\n",
+      "0.6036866359447005\n",
+      "test result\n",
+      "0.578\n"
+     ]
+    }
+   ],
+   "source": [
+    "experiment(gaussian_kernel, X, y, X_test, y_test, regu_para=0.03, eta=0.0001, tol=0.01)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 54,
+   "metadata": {},
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "Done kernel generating\n",
+      "iter 0 train_accuracy:0.520225\n",
+      "iter 2000 train_accuracy:0.520225\n",
+      "iter 4000 train_accuracy:0.525858\n",
+      "iter 6000 train_accuracy:0.542243\n",
+      "iter 8000 train_accuracy:0.547875\n",
+      "iter 10000 train_accuracy:0.560676\n",
+      "iter 12000 train_accuracy:0.573477\n",
+      "iter 14000 train_accuracy:0.581669\n",
+      "iter 16000 train_accuracy:0.580133\n",
+      "iter 18000 train_accuracy:0.582181\n",
+      "iter 20000 train_accuracy:0.585765\n",
+      "iter 22000 train_accuracy:0.586278\n",
+      "iter 24000 train_accuracy:0.586278\n",
+      "iter 26000 train_accuracy:0.589350\n",
+      "iter 28000 train_accuracy:0.587814\n",
+      "iter 30000 train_accuracy:0.589862\n",
+      "iter 32000 train_accuracy:0.589350\n",
+      "iter 34000 train_accuracy:0.590374\n",
+      "iter 36000 train_accuracy:0.591910\n",
+      "iter 38000 train_accuracy:0.594470\n",
+      "iter 40000 train_accuracy:0.593958\n",
+      "iter 42000 train_accuracy:0.596518\n",
+      "iter 44000 train_accuracy:0.596518\n",
+      "iter 46000 train_accuracy:0.597030\n",
+      "iter 48000 train_accuracy:0.597030\n",
+      "Done training, using time:(min) 1.7432286302248636\n",
+      "Done training\n",
+      "[-0.50969757 -0.6309732  -0.55838775 ...  0.67993996  0.6059955\n",
+      "  0.6205433 ]\n",
+      "training result\n",
+      "0.5954941116231439\n",
+      "test result\n",
+      "0.575\n"
+     ]
+    }
+   ],
+   "source": [
+    "experiment(gaussian_kernel, X, y, X_test, y_test, regu_para=0.01, eta=0.0001, tol=0.01, batch_size=500)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 55,
+   "metadata": {},
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "Done kernel generating\n",
+      "iter 0 train_accuracy:0.520225\n",
+      "iter 2000 train_accuracy:0.520225\n",
+      "iter 4000 train_accuracy:0.520225\n",
+      "iter 6000 train_accuracy:0.520225\n",
+      "iter 8000 train_accuracy:0.520225\n",
+      "iter 10000 train_accuracy:0.520225\n",
+      "iter 12000 train_accuracy:0.520225\n",
+      "iter 14000 train_accuracy:0.520225\n",
+      "iter 16000 train_accuracy:0.520225\n",
+      "iter 18000 train_accuracy:0.520225\n",
+      "iter 20000 train_accuracy:0.520225\n",
+      "iter 22000 train_accuracy:0.520225\n",
+      "iter 24000 train_accuracy:0.520225\n",
+      "iter 26000 train_accuracy:0.520225\n",
+      "iter 28000 train_accuracy:0.520737\n",
+      "iter 30000 train_accuracy:0.520225\n",
+      "iter 32000 train_accuracy:0.520737\n",
+      "iter 34000 train_accuracy:0.522273\n",
+      "iter 36000 train_accuracy:0.522785\n",
+      "iter 38000 train_accuracy:0.522273\n",
+      "iter 40000 train_accuracy:0.522785\n",
+      "iter 42000 train_accuracy:0.527394\n",
+      "iter 44000 train_accuracy:0.522785\n",
+      "iter 46000 train_accuracy:0.527394\n",
+      "iter 48000 train_accuracy:0.529442\n",
+      "Done training, using time:(min) 0.23624784549077352\n",
+      "Done training\n",
+      "[-0.0611975  -0.06100673 -0.05920965 ...  0.06871088  0.06470101\n",
+      "  0.06315939]\n",
+      "training result\n",
+      "0.5284178187403994\n",
+      "test result\n",
+      "0.517\n"
+     ]
+    }
+   ],
+   "source": [
+    "experiment(gaussian_kernel, X, y, X_test, y_test, regu_para=0.01, eta=0.0001, tol=0.01, batch_size=50)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 56,
+   "metadata": {},
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "Done kernel generating\n",
+      "iter 0 train_accuracy:0.479775\n",
+      "iter 2000 train_accuracy:0.520225\n",
+      "iter 4000 train_accuracy:0.521249\n",
+      "iter 6000 train_accuracy:0.520737\n",
+      "iter 8000 train_accuracy:0.584229\n",
+      "iter 10000 train_accuracy:0.549411\n",
+      "iter 12000 train_accuracy:0.528418\n",
+      "iter 14000 train_accuracy:0.538146\n",
+      "iter 16000 train_accuracy:0.541219\n",
+      "iter 18000 train_accuracy:0.555044\n",
+      "iter 20000 train_accuracy:0.550947\n",
+      "iter 22000 train_accuracy:0.550947\n",
+      "iter 24000 train_accuracy:0.548899\n",
+      "iter 26000 train_accuracy:0.561188\n",
+      "iter 28000 train_accuracy:0.554019\n",
+      "iter 30000 train_accuracy:0.564772\n",
+      "iter 32000 train_accuracy:0.582693\n",
+      "iter 34000 train_accuracy:0.552995\n",
+      "iter 36000 train_accuracy:0.553507\n",
+      "iter 38000 train_accuracy:0.551459\n",
+      "iter 40000 train_accuracy:0.570917\n",
+      "iter 42000 train_accuracy:0.583205\n",
+      "iter 44000 train_accuracy:0.565284\n",
+      "iter 46000 train_accuracy:0.548899\n",
+      "iter 48000 train_accuracy:0.563748\n",
+      "iter 50000 train_accuracy:0.564772\n",
+      "iter 52000 train_accuracy:0.549923\n",
+      "iter 54000 train_accuracy:0.553507\n",
+      "iter 56000 train_accuracy:0.540195\n",
+      "iter 58000 train_accuracy:0.548899\n",
+      "iter 60000 train_accuracy:0.555044\n",
+      "iter 62000 train_accuracy:0.543267\n",
+      "iter 64000 train_accuracy:0.554019\n",
+      "iter 66000 train_accuracy:0.559652\n",
+      "iter 68000 train_accuracy:0.558628\n",
+      "iter 70000 train_accuracy:0.573989\n",
+      "iter 72000 train_accuracy:0.579109\n",
+      "iter 74000 train_accuracy:0.555044\n",
+      "iter 76000 train_accuracy:0.566820\n",
+      "iter 78000 train_accuracy:0.541219\n",
+      "iter 80000 train_accuracy:0.558116\n",
+      "iter 82000 train_accuracy:0.549411\n",
+      "iter 84000 train_accuracy:0.539171\n",
+      "iter 86000 train_accuracy:0.551971\n",
+      "iter 88000 train_accuracy:0.582693\n",
+      "iter 90000 train_accuracy:0.549411\n",
+      "iter 92000 train_accuracy:0.571429\n",
+      "iter 94000 train_accuracy:0.573989\n",
+      "iter 96000 train_accuracy:0.557092\n",
+      "iter 98000 train_accuracy:0.587302\n",
+      "iter 100000 train_accuracy:0.565284\n",
+      "iter 102000 train_accuracy:0.571941\n",
+      "iter 104000 train_accuracy:0.557604\n",
+      "iter 106000 train_accuracy:0.541731\n",
+      "iter 108000 train_accuracy:0.551971\n",
+      "iter 110000 train_accuracy:0.550435\n",
+      "iter 112000 train_accuracy:0.546851\n",
+      "iter 114000 train_accuracy:0.582693\n",
+      "iter 116000 train_accuracy:0.585253\n",
+      "iter 118000 train_accuracy:0.581669\n",
+      "iter 120000 train_accuracy:0.559652\n",
+      "iter 122000 train_accuracy:0.549411\n",
+      "iter 124000 train_accuracy:0.580645\n",
+      "iter 126000 train_accuracy:0.551459\n",
+      "iter 128000 train_accuracy:0.552995\n",
+      "iter 130000 train_accuracy:0.543779\n",
+      "iter 132000 train_accuracy:0.565796\n",
+      "iter 134000 train_accuracy:0.541219\n",
+      "iter 136000 train_accuracy:0.554531\n",
+      "iter 138000 train_accuracy:0.543267\n",
+      "iter 140000 train_accuracy:0.548899\n",
+      "iter 142000 train_accuracy:0.584741\n",
+      "iter 144000 train_accuracy:0.578085\n",
+      "iter 146000 train_accuracy:0.539171\n",
+      "iter 148000 train_accuracy:0.549411\n",
+      "iter 150000 train_accuracy:0.538658\n",
+      "iter 152000 train_accuracy:0.549411\n",
+      "iter 154000 train_accuracy:0.543267\n",
+      "iter 156000 train_accuracy:0.563748\n",
+      "iter 158000 train_accuracy:0.581157\n",
+      "iter 160000 train_accuracy:0.569892\n",
+      "iter 162000 train_accuracy:0.535074\n",
+      "iter 164000 train_accuracy:0.544803\n",
+      "iter 166000 train_accuracy:0.566308\n",
+      "iter 168000 train_accuracy:0.584741\n",
+      "iter 170000 train_accuracy:0.557092\n",
+      "iter 172000 train_accuracy:0.563236\n",
+      "iter 174000 train_accuracy:0.567332\n",
+      "iter 176000 train_accuracy:0.556580\n",
+      "iter 178000 train_accuracy:0.557092\n",
+      "iter 180000 train_accuracy:0.566820\n",
+      "iter 182000 train_accuracy:0.566308\n",
+      "iter 184000 train_accuracy:0.548387\n",
+      "iter 186000 train_accuracy:0.552995\n",
+      "iter 188000 train_accuracy:0.549923\n",
+      "iter 190000 train_accuracy:0.552995\n",
+      "iter 192000 train_accuracy:0.562724\n",
+      "iter 194000 train_accuracy:0.587302\n",
+      "iter 196000 train_accuracy:0.562724\n",
+      "iter 198000 train_accuracy:0.549923\n",
+      "iter 200000 train_accuracy:0.533538\n",
+      "iter 202000 train_accuracy:0.543779\n",
+      "iter 204000 train_accuracy:0.578597\n",
+      "iter 206000 train_accuracy:0.574501\n",
+      "iter 208000 train_accuracy:0.544291\n",
+      "iter 210000 train_accuracy:0.564772\n",
+      "iter 212000 train_accuracy:0.557092\n",
+      "iter 214000 train_accuracy:0.587814\n",
+      "iter 216000 train_accuracy:0.581669\n",
+      "iter 218000 train_accuracy:0.549923\n",
+      "iter 220000 train_accuracy:0.556068\n",
+      "iter 222000 train_accuracy:0.549411\n",
+      "iter 224000 train_accuracy:0.548899\n",
+      "iter 226000 train_accuracy:0.546851\n",
+      "iter 228000 train_accuracy:0.543779\n",
+      "iter 230000 train_accuracy:0.556068\n",
+      "iter 232000 train_accuracy:0.550435\n",
+      "iter 234000 train_accuracy:0.554531\n",
+      "iter 236000 train_accuracy:0.543779\n",
+      "iter 238000 train_accuracy:0.558628\n",
+      "iter 240000 train_accuracy:0.554531\n",
+      "iter 242000 train_accuracy:0.565284\n",
+      "iter 244000 train_accuracy:0.552483\n",
+      "iter 246000 train_accuracy:0.566820\n",
+      "iter 248000 train_accuracy:0.570917\n",
+      "iter 250000 train_accuracy:0.581669\n",
+      "iter 252000 train_accuracy:0.539171\n",
+      "iter 254000 train_accuracy:0.555044\n",
+      "iter 256000 train_accuracy:0.568356\n",
+      "iter 258000 train_accuracy:0.578597\n",
+      "iter 260000 train_accuracy:0.540707\n",
+      "iter 262000 train_accuracy:0.554019\n",
+      "iter 264000 train_accuracy:0.567332\n",
+      "iter 266000 train_accuracy:0.588326\n",
+      "iter 268000 train_accuracy:0.582693\n",
+      "iter 270000 train_accuracy:0.553507\n",
+      "iter 272000 train_accuracy:0.549923\n",
+      "iter 274000 train_accuracy:0.560164\n",
+      "iter 276000 train_accuracy:0.543267\n",
+      "iter 278000 train_accuracy:0.566308\n",
+      "iter 280000 train_accuracy:0.569380\n",
+      "iter 282000 train_accuracy:0.552995\n",
+      "iter 284000 train_accuracy:0.568356\n",
+      "iter 286000 train_accuracy:0.543267\n",
+      "iter 288000 train_accuracy:0.566820\n",
+      "iter 290000 train_accuracy:0.551459\n",
+      "iter 292000 train_accuracy:0.556580\n",
+      "iter 294000 train_accuracy:0.565284\n",
+      "iter 296000 train_accuracy:0.582693\n",
+      "iter 298000 train_accuracy:0.570405\n",
+      "iter 300000 train_accuracy:0.549923\n",
+      "iter 302000 train_accuracy:0.559140\n",
+      "iter 304000 train_accuracy:0.564772\n",
+      "iter 306000 train_accuracy:0.565796\n",
+      "iter 308000 train_accuracy:0.547875\n",
+      "iter 310000 train_accuracy:0.569380\n",
+      "iter 312000 train_accuracy:0.580133\n",
+      "iter 314000 train_accuracy:0.553507\n",
+      "iter 316000 train_accuracy:0.562724\n",
+      "iter 318000 train_accuracy:0.579621\n",
+      "iter 320000 train_accuracy:0.559652\n",
+      "iter 322000 train_accuracy:0.571429\n",
+      "iter 324000 train_accuracy:0.552483\n",
+      "iter 326000 train_accuracy:0.569892\n",
+      "iter 328000 train_accuracy:0.552995\n",
+      "iter 330000 train_accuracy:0.579621\n",
+      "iter 332000 train_accuracy:0.549411\n",
+      "iter 334000 train_accuracy:0.551459\n",
+      "iter 336000 train_accuracy:0.564260\n",
+      "iter 338000 train_accuracy:0.579109\n",
+      "iter 340000 train_accuracy:0.568868\n",
+      "iter 342000 train_accuracy:0.585253\n",
+      "iter 344000 train_accuracy:0.545315\n",
+      "iter 346000 train_accuracy:0.542243\n",
+      "iter 348000 train_accuracy:0.543267\n",
+      "iter 350000 train_accuracy:0.560676\n",
+      "iter 352000 train_accuracy:0.556068\n",
+      "iter 354000 train_accuracy:0.562724\n",
+      "iter 356000 train_accuracy:0.579621\n",
+      "iter 358000 train_accuracy:0.579621\n",
+      "iter 360000 train_accuracy:0.579621\n",
+      "iter 362000 train_accuracy:0.573989\n",
+      "iter 364000 train_accuracy:0.556580\n",
+      "iter 366000 train_accuracy:0.557092\n",
+      "iter 368000 train_accuracy:0.552995\n",
+      "iter 370000 train_accuracy:0.566308\n",
+      "iter 372000 train_accuracy:0.556580\n",
+      "iter 374000 train_accuracy:0.549411\n",
+      "iter 376000 train_accuracy:0.548899\n",
+      "iter 378000 train_accuracy:0.587302\n",
+      "iter 380000 train_accuracy:0.565796\n",
+      "iter 382000 train_accuracy:0.554531\n",
+      "iter 384000 train_accuracy:0.580133\n",
+      "iter 386000 train_accuracy:0.554019\n",
+      "iter 388000 train_accuracy:0.557604\n",
+      "iter 390000 train_accuracy:0.543267\n",
+      "iter 392000 train_accuracy:0.564772\n",
+      "iter 394000 train_accuracy:0.541219\n",
+      "iter 396000 train_accuracy:0.552995\n",
+      "iter 398000 train_accuracy:0.543267\n",
+      "iter 400000 train_accuracy:0.557604\n",
+      "iter 402000 train_accuracy:0.549411\n",
+      "iter 404000 train_accuracy:0.549411\n",
+      "iter 406000 train_accuracy:0.570917\n",
+      "iter 408000 train_accuracy:0.581669\n",
+      "iter 410000 train_accuracy:0.548899\n",
+      "iter 412000 train_accuracy:0.556068\n",
+      "iter 414000 train_accuracy:0.566308\n",
+      "iter 416000 train_accuracy:0.546339\n",
+      "iter 418000 train_accuracy:0.571429\n",
+      "iter 420000 train_accuracy:0.549411\n",
+      "iter 422000 train_accuracy:0.565796\n",
+      "iter 424000 train_accuracy:0.549411\n",
+      "iter 426000 train_accuracy:0.583205\n",
+      "iter 428000 train_accuracy:0.569892\n",
+      "iter 430000 train_accuracy:0.552483\n",
+      "iter 432000 train_accuracy:0.550435\n",
+      "iter 434000 train_accuracy:0.557092\n",
+      "iter 436000 train_accuracy:0.564772\n",
+      "iter 438000 train_accuracy:0.557092\n",
+      "iter 440000 train_accuracy:0.565796\n",
+      "iter 442000 train_accuracy:0.562724\n",
+      "iter 444000 train_accuracy:0.546851\n",
+      "iter 446000 train_accuracy:0.565284\n",
+      "iter 448000 train_accuracy:0.556068\n",
+      "iter 450000 train_accuracy:0.566308\n",
+      "iter 452000 train_accuracy:0.543267\n",
+      "iter 454000 train_accuracy:0.550435\n",
+      "iter 456000 train_accuracy:0.548899\n"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "iter 458000 train_accuracy:0.548387\n",
+      "iter 460000 train_accuracy:0.566308\n",
+      "iter 462000 train_accuracy:0.544291\n",
+      "iter 464000 train_accuracy:0.557092\n",
+      "iter 466000 train_accuracy:0.584229\n",
+      "iter 468000 train_accuracy:0.564772\n",
+      "iter 470000 train_accuracy:0.565284\n",
+      "iter 472000 train_accuracy:0.551971\n",
+      "iter 474000 train_accuracy:0.565284\n",
+      "iter 476000 train_accuracy:0.562724\n",
+      "iter 478000 train_accuracy:0.549923\n",
+      "iter 480000 train_accuracy:0.538658\n",
+      "iter 482000 train_accuracy:0.579621\n",
+      "iter 484000 train_accuracy:0.565796\n",
+      "iter 486000 train_accuracy:0.582693\n",
+      "iter 488000 train_accuracy:0.584741\n",
+      "iter 490000 train_accuracy:0.548899\n",
+      "iter 492000 train_accuracy:0.551459\n",
+      "iter 494000 train_accuracy:0.543779\n",
+      "iter 496000 train_accuracy:0.565284\n",
+      "iter 498000 train_accuracy:0.540707\n",
+      "Done training, using time:(min) 2.358226732412974\n",
+      "Done training\n",
+      "[-0.11318626 -0.12767079 -0.11996031 ...  0.13870435  0.13704088\n",
+      "  0.13794387]\n",
+      "training result\n",
+      "0.5627240143369175\n",
+      "test result\n",
+      "0.5585\n"
+     ]
+    }
+   ],
+   "source": [
+    "experiment(gaussian_kernel, X, y, X_test, y_test, regu_para=0.1, eta=0.001, tol=0.1,batch_size=50, max_iter=500000)"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "# inhomogeneous kernel exps"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 37,
+   "metadata": {},
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "Done kernel generating\n",
+      "iter 0 train_accuracy:0.525858\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      "/home/y247xie/.local/lib/python3.5/site-packages/ipykernel_launcher.py:3: RuntimeWarning: overflow encountered in exp\n",
+      "  This is separate from the ipykernel package so we can avoid doing imports until\n"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "iter 2000 train_accuracy:0.962110\n",
+      "iter 4000 train_accuracy:0.988223\n",
+      "Done training, using time:(min) 0.28302624622980754\n",
+      "Done training\n",
+      "[-0.044  -0.2965 -0.127  ...  0.266   0.1635  0.26  ]\n",
+      "training result\n",
+      "0.9912954429083461\n",
+      "test result\n",
+      "0.6015\n"
+     ]
+    }
+   ],
+   "source": [
+    "experiment(inhomogeneous_poly_kernel, X, y, X_test, y_test, regu_para=0, eta=0.001, tol=0.01)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 38,
+   "metadata": {},
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "Done kernel generating\n",
+      "iter 0 train_accuracy:0.518689\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      "/home/y247xie/.local/lib/python3.5/site-packages/ipykernel_launcher.py:3: RuntimeWarning: overflow encountered in exp\n",
+      "  This is separate from the ipykernel package so we can avoid doing imports until\n"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "iter 2000 train_accuracy:0.544291\n",
+      "iter 4000 train_accuracy:0.570405\n",
+      "iter 6000 train_accuracy:0.568356\n",
+      "iter 8000 train_accuracy:0.594982\n",
+      "iter 10000 train_accuracy:0.586790\n",
+      "iter 12000 train_accuracy:0.699949\n",
+      "iter 14000 train_accuracy:0.648746\n",
+      "iter 16000 train_accuracy:0.830005\n",
+      "iter 18000 train_accuracy:0.526370\n",
+      "iter 20000 train_accuracy:0.644137\n",
+      "iter 22000 train_accuracy:0.573477\n",
+      "iter 24000 train_accuracy:0.578085\n",
+      "iter 26000 train_accuracy:0.811572\n",
+      "iter 28000 train_accuracy:0.658986\n",
+      "iter 30000 train_accuracy:0.653354\n",
+      "iter 32000 train_accuracy:0.796723\n",
+      "iter 34000 train_accuracy:0.813620\n",
+      "iter 36000 train_accuracy:0.734767\n",
+      "iter 38000 train_accuracy:0.712750\n",
+      "iter 40000 train_accuracy:0.547363\n",
+      "iter 42000 train_accuracy:0.539171\n",
+      "iter 44000 train_accuracy:0.631848\n",
+      "iter 46000 train_accuracy:0.687660\n",
+      "iter 48000 train_accuracy:0.830517\n",
+      "Done training, using time:(min) 2.8351170420646667\n",
+      "Done training\n",
+      "[-0.02731652 -0.18705636 -0.09454211 ...  0.16458566  0.12203252\n",
+      "  0.17388478]\n",
+      "training result\n",
+      "0.6379928315412187\n",
+      "test result\n",
+      "0.55\n"
+     ]
+    }
+   ],
+   "source": [
+    "experiment(inhomogeneous_poly_kernel, X, y, X_test, y_test, regu_para=1, eta=0.001, tol=0.1)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 39,
+   "metadata": {},
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "Done kernel generating\n",
+      "iter 0 train_accuracy:0.561700\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      "/home/y247xie/.local/lib/python3.5/site-packages/ipykernel_launcher.py:3: RuntimeWarning: overflow encountered in exp\n",
+      "  This is separate from the ipykernel package so we can avoid doing imports until\n"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "iter 2000 train_accuracy:0.521249\n",
+      "iter 4000 train_accuracy:0.524322\n",
+      "iter 6000 train_accuracy:0.520737\n",
+      "iter 8000 train_accuracy:0.529954\n",
+      "iter 10000 train_accuracy:0.522273\n",
+      "iter 12000 train_accuracy:0.521761\n",
+      "iter 14000 train_accuracy:0.503328\n",
+      "iter 16000 train_accuracy:0.479775\n",
+      "iter 18000 train_accuracy:0.519713\n",
+      "iter 20000 train_accuracy:0.521761\n",
+      "iter 22000 train_accuracy:0.521761\n",
+      "iter 24000 train_accuracy:0.532002\n",
+      "iter 26000 train_accuracy:0.522273\n",
+      "iter 28000 train_accuracy:0.494112\n",
+      "iter 30000 train_accuracy:0.521249\n",
+      "iter 32000 train_accuracy:0.521761\n",
+      "iter 34000 train_accuracy:0.483359\n",
+      "iter 36000 train_accuracy:0.519201\n",
+      "iter 38000 train_accuracy:0.520225\n",
+      "iter 40000 train_accuracy:0.522273\n",
+      "iter 42000 train_accuracy:0.516129\n",
+      "iter 44000 train_accuracy:0.494112\n",
+      "iter 46000 train_accuracy:0.492063\n",
+      "iter 48000 train_accuracy:0.519713\n",
+      "Done training, using time:(min) 2.832144820690155\n",
+      "Done training\n",
+      "[-0.00625517 -0.0331439  -0.01440623 ...  0.01616075  0.02451547\n",
+      "  0.018909  ]\n",
+      "training result\n",
+      "0.5202252944188428\n",
+      "test result\n",
+      "0.4995\n"
+     ]
+    }
+   ],
+   "source": [
+    "experiment(inhomogeneous_poly_kernel, X, y, X_test, y_test, regu_para=10, eta=0.01, tol=0.1)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 50,
+   "metadata": {},
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "Done kernel generating\n",
+      "iter 0 train_accuracy:0.567332\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      "/home/y247xie/.local/lib/python3.5/site-packages/ipykernel_launcher.py:3: RuntimeWarning: overflow encountered in exp\n",
+      "  This is separate from the ipykernel package so we can avoid doing imports until\n"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "iter 2000 train_accuracy:0.595494\n",
+      "iter 4000 train_accuracy:0.573989\n",
+      "iter 6000 train_accuracy:0.536610\n",
+      "iter 8000 train_accuracy:0.573989\n",
+      "iter 10000 train_accuracy:0.535074\n",
+      "iter 12000 train_accuracy:0.548899\n",
+      "iter 14000 train_accuracy:0.542243\n",
+      "iter 16000 train_accuracy:0.593446\n",
+      "iter 18000 train_accuracy:0.527906\n",
+      "iter 20000 train_accuracy:0.556068\n",
+      "iter 22000 train_accuracy:0.538658\n",
+      "iter 24000 train_accuracy:0.580645\n",
+      "iter 26000 train_accuracy:0.589862\n",
+      "iter 28000 train_accuracy:0.602151\n",
+      "iter 30000 train_accuracy:0.561188\n",
+      "iter 32000 train_accuracy:0.541731\n",
+      "iter 34000 train_accuracy:0.537122\n",
+      "iter 36000 train_accuracy:0.548899\n",
+      "iter 38000 train_accuracy:0.573477\n",
+      "iter 40000 train_accuracy:0.550947\n",
+      "iter 42000 train_accuracy:0.523297\n",
+      "iter 44000 train_accuracy:0.497184\n",
+      "iter 46000 train_accuracy:0.533026\n",
+      "iter 48000 train_accuracy:0.536098\n",
+      "Done training, using time:(min) 2.794492701689402\n",
+      "Done training\n",
+      "[-0.00029785 -0.02198898 -0.01531829 ...  0.01808216  0.01348821\n",
+      "  0.01795119]\n",
+      "training result\n",
+      "0.5483870967741935\n",
+      "test result\n",
+      "0.523\n"
+     ]
+    }
+   ],
+   "source": [
+    "experiment(inhomogeneous_poly_kernel, X, y, X_test, y_test, regu_para=10, eta=0.001, tol=0.1)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 51,
+   "metadata": {},
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "Done kernel generating\n",
+      "iter 0 train_accuracy:0.562212\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      "/home/y247xie/.local/lib/python3.5/site-packages/ipykernel_launcher.py:3: RuntimeWarning: overflow encountered in exp\n",
+      "  This is separate from the ipykernel package so we can avoid doing imports until\n"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "iter 2000 train_accuracy:0.483359\n",
+      "iter 4000 train_accuracy:0.538146\n",
+      "iter 6000 train_accuracy:0.572965\n",
+      "iter 8000 train_accuracy:0.556068\n",
+      "iter 10000 train_accuracy:0.548387\n",
+      "iter 12000 train_accuracy:0.569892\n",
+      "iter 14000 train_accuracy:0.483871\n",
+      "iter 16000 train_accuracy:0.543779\n",
+      "iter 18000 train_accuracy:0.493600\n",
+      "iter 20000 train_accuracy:0.543779\n",
+      "iter 22000 train_accuracy:0.575525\n",
+      "iter 24000 train_accuracy:0.510497\n",
+      "iter 26000 train_accuracy:0.530466\n",
+      "iter 28000 train_accuracy:0.485407\n",
+      "iter 30000 train_accuracy:0.547363\n",
+      "iter 32000 train_accuracy:0.524322\n",
+      "iter 34000 train_accuracy:0.513569\n",
+      "iter 36000 train_accuracy:0.533026\n",
+      "iter 38000 train_accuracy:0.558116\n",
+      "iter 40000 train_accuracy:0.479775\n",
+      "iter 42000 train_accuracy:0.487967\n",
+      "iter 44000 train_accuracy:0.523810\n",
+      "iter 46000 train_accuracy:0.479775\n",
+      "iter 48000 train_accuracy:0.483359\n",
+      "Done training, using time:(min) 2.787503182888031\n",
+      "Done training\n",
+      "[-0.03852538 -0.12266537 -0.24466277 ...  0.20037286  0.21487781\n",
+      "  0.20457185]\n",
+      "training result\n",
+      "0.48131080389144903\n",
+      "test result\n",
+      "0.501\n"
+     ]
+    }
+   ],
+   "source": [
+    "experiment(inhomogeneous_poly_kernel, X, y, X_test, y_test, regu_para=1, eta=0.03, tol=0.1)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": []
+  }
+ ],
+ "metadata": {
+  "kernelspec": {
+   "display_name": "Python 3",
+   "language": "python",
+   "name": "python3"
+  },
+  "language_info": {
+   "codemirror_mode": {
+    "name": "ipython",
+    "version": 3
+   },
+   "file_extension": ".py",
+   "mimetype": "text/x-python",
+   "name": "python",
+   "nbconvert_exporter": "python",
+   "pygments_lexer": "ipython3",
+   "version": "3.5.2"
+  }
+ },
+ "nbformat": 4,
+ "nbformat_minor": 2
+}
