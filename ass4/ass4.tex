@@ -1,0 +1,232 @@
+\documentclass{article}
+\usepackage[nonatbib]{nips_2016}
+
+\usepackage[breaklinks=true,letterpaper=true,colorlinks,citecolor=black,bookmarks=false]{hyperref}
+\usepackage{amsthm}
+\usepackage{amsmath,amssymb}
+\usepackage{enumitem}
+\usepackage{comment}
+\usepackage[sort&compress,numbers]{natbib}
+\usepackage[normalem]{ulem}
+
+% use Times
+\usepackage{times}
+% For figures
+\usepackage{graphicx} % more modern
+%\usepackage{epsfig} % less modern
+%\usepackage{subfig} 
+
+\graphicspath{{../fig/}}
+
+\usepackage{tikz}
+\usepackage{tkz-tab}
+\usepackage{caption} 
+\usepackage{subcaption} 
+\usetikzlibrary{shapes.geometric, arrows}
+\tikzstyle{arrow} = [very thick,->,>=stealth]
+
+\usepackage{cleveref}
+\usepackage{setspace}
+\usepackage{wrapfig}
+%\usepackage[ruled]{algorithm}
+\usepackage{algpseudocode}
+%\usepackage[noend,linesnumbered]{algorithm2e}
+\usepackage[linesnumbered,ruled,vlined]{algorithm2e}
+
+\usepackage[disable]{todonotes}
+
+\title{CS680 2018 Fall\\Intro to ML\\Assignment 4}
+
+\author{
+	Yu-Qing Xie \\
+	School of Computer Science\\
+	University of Waterloo\\
+	Waterloo, ON, N2L 3G1 \\
+	\texttt{yuqing.xie@uwaterloo.ca} \\
+	%{\color{red} proposal due: October 23; report due: December 3.}
+}
+
+\begin{document}
+\maketitle
+\section{Convolutional Neural Networks (CNN) (50 pts)}
+
+\subsection{Train a VGG11 net on the MNIST dataset.}
+
+\subsection{(20 pts) Inspect the training process}
+The training accuracy after 5 epochs: $98.66\%$\\
+The training loss after 5 epochs: 0.0413\\
+The test accuracy after 5 epochs: $98.1\%$\\
+The test loss after 5 epochs: 0.0624\\
+\begin{figure}[h]
+	\begin{minipage}[b]{.5\textwidth}\centering
+		\includegraphics[width=\textwidth]{origin_accuracy.png}
+		\caption{(a), (b): origin accuracy}\label{origin_accuracy}
+	\end{minipage}
+	\begin{minipage}[b]{.5\textwidth}\centering
+		\includegraphics[width=\textwidth]{origin_loss.png}
+		\caption{(c), (d): origin loss}\label{origin_loss}
+	\end{minipage}
+\end{figure}
+
+\subsection{(10 pts) Inspect the generalization properties of the final model}
+\textbf{Rotation}\\
+As the absolute rotation value increases to 45, the accuracy decrease to around $44\%$, and the loss increase to around 2.5.\\
+\textbf{Blur}\\
+As the absolute blur parameter increases to 7, the accuracy decrease to around $11\%$, and the loss increase to around 2.4.\\
+\begin{figure}[h]
+	\begin{minipage}[b]{.5\textwidth}\centering
+		\includegraphics[width=\textwidth]{origin_rotation.png}
+		\caption{(e): origin rotation}\label{origin_rotation}
+	\end{minipage}
+	\begin{minipage}[b]{.5\textwidth}\centering
+		\includegraphics[width=\textwidth]{origin_blur.png}
+		\caption{(f): origin blur}\label{origin_blur}
+	\end{minipage}
+\end{figure}
+
+\subsection{(20 pts) Verify the effect of regularization}
+\textbf{L2 normalization}\\
+Set regulation parameter to 0.001.
+The training accuracy after 5 epochs: $98.16\%$\\
+The training loss after 5 epochs: 0.227\\
+The test accuracy after 5 epochs: $98.05\%$\\
+The test loss after 5 epochs: 0.222\\
+
+\begin{figure}[hbt]
+	\begin{minipage}[b]{.5\textwidth}\centering
+		\includegraphics[width=\textwidth]{L2_accuracy.png}
+		\caption{(g): L2 accuracy}\label{L2_accuracy}
+	\end{minipage}
+	\begin{minipage}[b]{.5\textwidth}\centering
+		\includegraphics[width=\textwidth]{L2_loss.png}
+		\caption{(g): L2 loss}\label{L2_loss}
+	\end{minipage}
+\end{figure}
+As the absolute rotation value increases to 45, the accuracy decrease to around $30\%$, and the loss increase to around 3.1.\\
+As the absolute blur parameter increases to 7, the accuracy decrease to around $11\%$, and the loss increase to around 4.9.\\
+\begin{figure}[hbt]
+	\begin{minipage}[b]{.5\textwidth}\centering
+		\includegraphics[width=\textwidth]{L2_rotation.png}
+		\caption{(g): L2 rotation}\label{L2_rotation}
+	\end{minipage}
+	\begin{minipage}[b]{.5\textwidth}\centering
+		\includegraphics[width=\textwidth]{L2_blur.png}
+		\caption{(g): L2 blur}\label{L2_blur}
+	\end{minipage}
+\end{figure}
+
+\textbf{Data augmentation}\\
+In this part, I randomly chose the rotation angle from -45 to 45 to form $6*n$ samples, where $n$ is the size of the origin dataset. I also randomly choose the blur factor from 0 to 7 to form $4*n$ samples.
+
+TODO: redo all the exps
+
+The training accuracy after 5 epochs: $79.74\%$\\
+The training loss after 5 epochs: 0.604\\
+The test accuracy after 5 epochs: $22.21\%$\\
+The test loss after 5 epochs: 2.131\\
+\begin{figure}[hbt]
+	\begin{minipage}[b]{.5\textwidth}\centering
+		\includegraphics[width=\textwidth]{aug_accuracy.png}
+		\caption{(h): augmentation accuracy}\label{aug_accuracy}
+	\end{minipage}
+	\begin{minipage}[b]{.5\textwidth}\centering
+		\includegraphics[width=\textwidth]{aug_loss.png}
+		\caption{(h): augmentation loss}\label{aug_loss}
+	\end{minipage}
+\end{figure}
+As the absolute rotation value increases to 45, the accuracy decrease to around $30\%$, and the loss increase to around 3.1.\\
+As the absolute blur parameter increases to 7, the accuracy decrease to around $11\%$, and the loss increase to around 4.9.\\
+\begin{figure}[hbt]
+	\begin{minipage}[b]{.5\textwidth}\centering
+		\includegraphics[width=\textwidth]{aug_rotation.png}
+		\caption{(h): augmentation rotation}\label{aug_rotation}
+	\end{minipage}
+	\begin{minipage}[b]{.5\textwidth}\centering
+		\includegraphics[width=\textwidth]{aug_blur.png}
+		\caption{(h): augmentation blur}\label{aug_blur}
+	\end{minipage}
+\end{figure}
+
+\section{Gaussian Processes (GP) (20 pts)}
+\subsection{(10 pts)}
+\begin{figure}[hbt]
+	\begin{minipage}[b]{.33\textwidth}\centering
+		\includegraphics[width=\textwidth]{gaussian_10.png}
+		\caption{Gaussian, $\sigma$=10}\label{gaussian_10}
+	\end{minipage}
+	\begin{minipage}[b]{.33\textwidth}\centering
+		\includegraphics[width=\textwidth]{gaussian_1.png}
+		\caption{Gaussian, $\sigma$=1}\label{gaussian_1}
+	\end{minipage}
+	\begin{minipage}[b]{.33\textwidth}\centering
+		\includegraphics[width=\textwidth]{gaussian_01.png}
+		\caption{Gaussian, $\sigma$=0.1}\label{gaussian_01}
+	\end{minipage}
+\end{figure}
+We can see from the graphs, as $\sigma$ decrease from 10 to 0.1, the sample paths get choppier. This is because that when $\sigma$ get smaller, $k_{\sigma}(s,t)$ will be closer to 0, which means less covariance. Less covariance means random variables will become less related to each other, thus the path get choppier.
+
+\subsection{(10 pts)}
+\begin{align}
+\frac{\partial^2 k_\sigma}{\partial s\partial t}(s,t) &= \frac{\partial^2 k_\sigma}{\partial s\partial t}\exp(-\tfrac{1}{2\sigma}(s-t)^2)\\
+&=\frac{\partial }{\partial s} \frac{\partial}{\partial t} \exp(-\tfrac{1}{2\sigma}(s-t)^2)\\
+&=\frac{\partial s}{\partial s} \exp(-\tfrac{1}{2\sigma}(s-t)^2)*2*(-\tfrac{1}{2\sigma}(s-t))*(-1)\\
+&=\frac{\partial s}{\partial s} \exp(-\tfrac{1}{2\sigma}(s-t)^2)*\tfrac{1}{\sigma}(s-t))\\
+&=\exp(-\tfrac{1}{2\sigma}(s-t)^2)*(2*(-\tfrac{1}{2\sigma}(s-t))*\tfrac{1}{\sigma}(s-t)+\tfrac{1}{\sigma})\\
+&=\exp(-\tfrac{1}{2\sigma}(s-t)^2)*(\tfrac{1}{\sigma} -\tfrac{1}{\sigma^2}(s-t)^2))\\
+\end{align}
+\begin{figure}[h]
+	\begin{minipage}[b]{.33\textwidth}\centering
+		\includegraphics[width=\textwidth]{partial_10.png}
+		\caption{Partial kernel, $\sigma$=10}\label{partial_10}
+	\end{minipage}
+	\begin{minipage}[b]{.33\textwidth}\centering
+		\includegraphics[width=\textwidth]{partial_1.png}
+		\caption{Partial kernel, $\sigma$=1}\label{partial_1}
+	\end{minipage}
+	\begin{minipage}[b]{.33\textwidth}\centering
+		\includegraphics[width=\textwidth]{partial_01.png}
+		\caption{Partial kernel, $\sigma$=0.1}\label{partial_01}
+	\end{minipage}
+\end{figure}
+
+As we can see from above, it is no longer a Gaussian kernel.\\
+The conclusion still hold that as $\sigma$ decrease from 10 to 0.1, the sample paths get choppier for the same reason. The difference is that in this random process, the sample values become more relevant to the $x$ value. This is because the polynomial term multiplied at last.\\
+One more thing we can observe is that the variation or amplitude in this random process is similar with the Gaussian process.
+\section{Regularization (30 pts)}
+\subsection{(15 pts)} 
+\begin{align*}
+&\frac{\partial}{\partial \mathbf{w}}\sum_{i=1}^n \mathbf{E}[(y_i - \mathbf{w}^{\top}\tilde{\mathbf{x_i}})^2]\\
+=& -\sum_{i=1}^n \mathbf{E}[(y_i - \mathbf{w}^{\top}\tilde{\mathbf{x_i}})*\tilde{\mathbf{x_i}}^\top +(y_i - \mathbf{w}^{\top}\tilde{\mathbf{x_i}})^\top*\tilde{\mathbf{x_i}}]\\
+=&-\sum_{i=1}^n \mathbf{E}[(y_i*\tilde{\mathbf{x_i}}^\top  - \mathbf{w}^{\top}\tilde{\mathbf{x_i}}*\tilde{\mathbf{x_i}}^\top +y_i^\top*\tilde{\mathbf{x_i}} - (\mathbf{w}^{\top}\tilde{\mathbf{x_i}})^\top*\tilde{\mathbf{x_i}}]\\
+=&-\sum_{i=1}^n [\mathbf{E}(y_i*\tilde{\mathbf{x_i}}^\top)  - \mathbf{E}(\mathbf{w}^{\top}\tilde{\mathbf{x_i}}*\tilde{\mathbf{x_i}}^\top) +\mathbf{E}(y_i^\top*\tilde{\mathbf{x_i}}) - \mathbf{E}(\tilde{\mathbf{x_i}}^\top*\mathbf{w}*\tilde{\mathbf{x_i}})]\\
+=&-\sum_{i=1}^n [2y_i*\mathbf{x_i}^\top  - 2\mathbf{E}(\mathbf{w}^{\top}\tilde{\mathbf{x_i}}*\tilde{\mathbf{x_i}}^\top)]\\
+=&-\sum_{i=1}^n [2y_i*\mathbf{x_i}^\top  - 2\mathbf{E}(\mathbf{w}^{\top}(\mathbf{x_i}+\mathbf{\epsilon_i})(\mathbf{x_i}+\mathbf{\epsilon_i})^\top)]\\
+=&-\sum_{i=1}^n [2y_i*\mathbf{x_i}^\top  - 2\mathbf{E}(\mathbf{w}^{\top}(\mathbf{x_i}*\mathbf{x_i}^\top+2\mathbf{x_i}*\mathbf{\epsilon_i}^\top + \mathbf{\epsilon_i}*\mathbf{\epsilon_i}^\top))]\\
+=&-\sum_{i=1}^n [2y_i*\mathbf{x_i}^\top  - 2\mathbf{w}^{\top}\mathbf{x_i}*\mathbf{x_i}^\top -2 \mathbf{w}^{\top}\mathbf{E}(\mathbf{\epsilon_i}*\mathbf{\epsilon_i}^\top))]\\
+=&-\sum_{i=1}^n [2y_i*\mathbf{x_i}^\top  - 2\mathbf{w}^{\top}\mathbf{x_i}*\mathbf{x_i}^\top -2 \mathbf{w}^{\top}\lambda\mathbf{I}]\\
+=&2\sum_{i=1}^n [ \mathbf{w}^{\top}\mathbf{x_i}*\mathbf{x_i}^\top -y_i*\mathbf{x_i}^\top +\lambda\mathbf{w}^{\top}]
+\end{align*}
+As long as we choose the regularization term in (2) to be $\lambda ||\mathbf{w}||_{2}^2$, we will get the same partial derivative. Thus the optimal $\mathbf{w}$ will be the same.
+\subsection{(15 pts)} 
+\begin{align*}
+&\frac{\partial}{\partial \mathbf{w}}\sum_{i=1}^n \mathbf{E}[(y_i - \mathbf{w}^{\top}\tilde{\mathbf{x_i}})^2]\\
+=& -\sum_{i=1}^n \mathbf{E}[(y_i - \mathbf{w}^{\top}\tilde{\mathbf{x_i}})*\tilde{\mathbf{x_i}}^\top +(y_i - \mathbf{w}^{\top}\tilde{\mathbf{x_i}})^\top*\tilde{\mathbf{x_i}}]\\
+=&-\sum_{i=1}^n \mathbf{E}[(y_i*\tilde{\mathbf{x_i}}^\top  - \mathbf{w}^{\top}\tilde{\mathbf{x_i}}*\tilde{\mathbf{x_i}}^\top +y_i^\top*\tilde{\mathbf{x_i}} - (\mathbf{w}^{\top}\tilde{\mathbf{x_i}})^\top*\tilde{\mathbf{x_i}}]\\
+=&-\sum_{i=1}^n [\mathbf{E}(y_i*\tilde{\mathbf{x_i}}^\top)  - \mathbf{E}(\mathbf{w}^{\top}\tilde{\mathbf{x_i}}*\tilde{\mathbf{x_i}}^\top) +\mathbf{E}(y_i^\top*\tilde{\mathbf{x_i}}) - \mathbf{E}(\tilde{\mathbf{x_i}}^\top*\mathbf{w}*\tilde{\mathbf{x_i}})]\\
+=&-\sum_{i=1}^n [\mathbf{E}(y_i*(\mathbf{x_i}\odot\mathbf{\epsilon_i})^\top)
+  - \mathbf{E}(\mathbf{w}^{\top}(\mathbf{x_i}\odot\mathbf{\epsilon_i})*(\mathbf{x_i}\odot\mathbf{\epsilon_i})^\top)
+  +\mathbf{E}(y_i^\top*\mathbf{x_i}\odot\mathbf{\epsilon_i})
+  - \mathbf{E}((\mathbf{x_i}\odot\mathbf{\epsilon_i})^\top*\mathbf{w}*(\mathbf{x_i}\odot\mathbf{\epsilon_i}))]\\
+=&-\sum_{i=1}^n [2(y_i*\mathbf{x_i}^\top)
+  - 2\mathbf{E}(\mathbf{w}^{\top}(\mathbf{x_i}\odot\mathbf{\epsilon_i})*(\mathbf{x_i}\odot\mathbf{\epsilon_i})^\top)]\\
+=&-\sum_{i=1}^n [2(y_i*\mathbf{x_i}^\top)
+  - 2\mathbf{w}^{\top}(\mathbf{O}-(1-\frac{1}{p}) \mathbf{I})\odot(\mathbf{x_i}*\mathbf{x_i}^\top)]\\
+=&-\sum_{i=1}^n [2(y_i*\mathbf{x_i}^\top) - 2\mathbf{w}^{\top}\mathbf{x_i}*\mathbf{x_i}^\top
+  - 2\mathbf{w}^{\top}\frac{1-p}{p} \mathbf{I}\odot(\mathbf{x_i}*\mathbf{x_i}^\top)]\\
+  =&2\sum_{i=1}^n [\mathbf{w}^{\top}\mathbf{x_i}*\mathbf{x_i}^\top
+  - (y_i*\mathbf{x_i}^\top)  + \frac{1-p}{p}\mathbf{w}^{\top}diag(\mathbf{x_i}*\mathbf{x_i}^\top)]
+\end{align*}
+In the above equations, $\mathbf{O}$ denotes the all-ones matrix, and $\mathbf{I}$ denotes the identity.\\
+Next, let $\Gamma = (diag(\mathbf{x_i}*\mathbf{x_i}^\top))^{1/2}$, then we add $\frac{1-p}{p}\||\Gamma \mathbf{w}||^2_2$ to be the regularization term in (2), we will get the same partial derivative. Thus, they are the same.
+\nocite{*}
+\end{document}
